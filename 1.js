@@ -1,14 +1,13 @@
 /*
  * K2 Lampa Pack
- * One URL -> loads a curated set of Lampa plugins automatically.
+ * File: 1.js
+ * Version: 1.1.0
  *
- * Install in Lampa:
- * Settings -> Extensions -> Add plugin -> URL to this file.
- *
- * Notes:
- * - Child plugins are loaded at runtime and do not need to be entered manually.
- * - Edit PLUGINS below to enable/disable/add/remove plugins.
- * - Uses sequential loading, timeout, retry and duplicate protection.
+ * Goal:
+ * - keep standard Lampa UI intact;
+ * - enable online functionality early;
+ * - load Online MOD + Filmix and safe utility plugins;
+ * - one broken child plugin must not stop the rest.
  */
 (function () {
     'use strict';
@@ -17,19 +16,36 @@
     window.__K2_LAMPA_PACK_RUNNING__ = true;
 
     var PACK_NAME = 'K2 Lampa Pack';
-    var PACK_VERSION = '1.0.0';
+    var PACK_VERSION = '1.1.0';
 
     /*
-     * enabled: true  -> load automatically
-     * enabled: false -> keep in the list but do not load
-     *
-     * For maximum compatibility, keep URLs on HTTPS whenever possible.
+     * IMPORTANT:
+     * NB557 free.js currently only sets these flags.
+     * We set them inline, immediately, to avoid a race with Lampa startup.
+     */
+    window.lampa_settings = window.lampa_settings || {};
+    window.lampa_settings.dcma = false;
+    window.lampa_settings.disable_features =
+        window.lampa_settings.disable_features || {};
+    window.lampa_settings.disable_features.dmca = true;
+
+    /*
+     * Visual plugins that alter the standard Lampa home/movie UI are
+     * intentionally DISABLED:
+     *   - Stylish Interface
+     *   - Full Hero
      */
     var PLUGINS = [
         {
             id: 'online_mod',
             name: 'Online MOD',
             url: 'https://nb557.github.io/plugins/online_mod.js',
+            enabled: true
+        },
+        {
+            id: 'filmix',
+            name: 'Filmix Online',
+            url: 'https://lampaplugins.github.io/store/fx.js',
             enabled: true
         },
         {
@@ -44,18 +60,21 @@
             url: 'https://igorek1986.github.io/lampa-plugins/status.js',
             enabled: true
         },
+
+        /* Keep standard Lampa appearance */
         {
             id: 'stylish_interface',
             name: 'Stylish Interface',
             url: 'https://igorek1986.github.io/lampa-plugins/int.js',
-            enabled: true
+            enabled: false
         },
         {
             id: 'full_hero',
             name: 'Full Hero',
             url: 'https://igorek1986.github.io/lampa-plugins/full_hero.js',
-            enabled: true
+            enabled: false
         },
+
         {
             id: 'profiles',
             name: 'Profiles',
@@ -111,7 +130,7 @@
         loaded: [],
         failed: [],
         skipped: [],
-        started: new Date().getTime(),
+        started: Date.now(),
         finished: false
     };
 
@@ -137,9 +156,15 @@
         } catch (e) {}
     }
 
+    function normalized(url) {
+        return String(url || '').split('?')[0].replace(/\/+$/, '');
+    }
+
     function alreadyPresent(plugin) {
-        if (window.__K2_LAMPA_LOADED_PLUGINS__ &&
-            window.__K2_LAMPA_LOADED_PLUGINS__[plugin.id]) {
+        if (
+            window.__K2_LAMPA_LOADED_PLUGINS__ &&
+            window.__K2_LAMPA_LOADED_PLUGINS__[plugin.id]
+        ) {
             return true;
         }
 
@@ -147,7 +172,11 @@
             var scripts = document.getElementsByTagName('script');
             for (var i = 0; i < scripts.length; i++) {
                 var src = scripts[i].src || '';
-                if (src === plugin.url || scripts[i].getAttribute('data-k2-plugin') === plugin.id) {
+
+                if (
+                    normalized(src) === normalized(plugin.url) ||
+                    scripts[i].getAttribute('data-k2-plugin') === plugin.id
+                ) {
                     return true;
                 }
             }
@@ -157,23 +186,26 @@
     }
 
     function markLoaded(plugin) {
-        window.__K2_LAMPA_LOADED_PLUGINS__ = window.__K2_LAMPA_LOADED_PLUGINS__ || {};
+        window.__K2_LAMPA_LOADED_PLUGINS__ =
+            window.__K2_LAMPA_LOADED_PLUGINS__ || {};
+
         window.__K2_LAMPA_LOADED_PLUGINS__[plugin.id] = true;
     }
 
     function addScript(plugin, attempt, done) {
         var finished = false;
         var script = document.createElement('script');
-        var timeoutMs = 15000;
         var timer;
 
         script.type = 'text/javascript';
         script.async = false;
+        script.src = plugin.url;
         script.setAttribute('data-k2-plugin', plugin.id);
 
         function complete(ok, reason) {
             if (finished) return;
             finished = true;
+
             clearTimeout(timer);
 
             script.onload = null;
@@ -184,24 +216,34 @@
                 markLoaded(plugin);
                 state.loaded.push(plugin.name);
                 log('loaded:', plugin.name);
-                done(true);
-            } else if (attempt < 2) {
+                done();
+                return;
+            }
+
+            if (attempt < 2) {
                 log('retry:', plugin.name, reason || 'error');
+
                 try {
-                    if (script.parentNode) script.parentNode.removeChild(script);
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
                 } catch (e) {}
+
                 setTimeout(function () {
                     addScript(plugin, attempt + 1, done);
-                }, 700);
-            } else {
-                state.failed.push({
-                    name: plugin.name,
-                    url: plugin.url,
-                    reason: reason || 'load error'
-                });
-                log('failed:', plugin.name, reason || 'load error');
-                done(false);
+                }, 800);
+
+                return;
             }
+
+            state.failed.push({
+                name: plugin.name,
+                url: plugin.url,
+                reason: reason || 'load error'
+            });
+
+            log('failed:', plugin.name, reason || 'load error');
+            done();
         }
 
         script.onload = function () {
@@ -209,7 +251,10 @@
         };
 
         script.onreadystatechange = function () {
-            if (script.readyState === 'loaded' || script.readyState === 'complete') {
+            if (
+                script.readyState === 'loaded' ||
+                script.readyState === 'complete'
+            ) {
                 complete(true);
             }
         };
@@ -220,18 +265,16 @@
 
         timer = setTimeout(function () {
             complete(false, 'timeout');
-        }, timeoutMs);
+        }, 20000);
 
-        var separator = plugin.url.indexOf('?') === -1 ? '?' : '&';
-        script.src = plugin.url + separator + 'k2pack=' + encodeURIComponent(PACK_VERSION);
-
-        (document.body || document.head || document.documentElement).appendChild(script);
+        (document.head || document.body || document.documentElement)
+            .appendChild(script);
     }
 
     function run(index) {
         if (index >= PLUGINS.length) {
             state.finished = true;
-            state.elapsed_ms = new Date().getTime() - state.started;
+            state.elapsed_ms = Date.now() - state.started;
 
             log(
                 'finished',
@@ -240,11 +283,13 @@
                 'skipped=' + state.skipped.length
             );
 
-            // Show only if there is a problem; normal startup stays quiet.
             if (state.failed.length) {
                 notify(
-                    PACK_NAME + ': завантажено ' +
-                    state.loaded.length + ', помилок ' + state.failed.length
+                    PACK_NAME +
+                    ': завантажено ' +
+                    state.loaded.length +
+                    ', помилок ' +
+                    state.failed.length
                 );
             }
 
@@ -254,43 +299,40 @@
         var plugin = PLUGINS[index];
 
         if (!plugin.enabled) {
-            state.skipped.push(plugin.name);
+            state.skipped.push(plugin.name + ' (disabled)');
             run(index + 1);
             return;
         }
 
         if (alreadyPresent(plugin)) {
             state.skipped.push(plugin.name + ' (already loaded)');
-            log('skip duplicate:', plugin.name);
             run(index + 1);
             return;
         }
 
         addScript(plugin, 1, function () {
-            // Always continue, even if one plugin fails.
             setTimeout(function () {
                 run(index + 1);
-            }, 50);
+            }, 75);
         });
     }
 
-    function start() {
+    function bootstrap() {
+        /*
+         * Do NOT wait for appready.
+         *
+         * Direct Lampa extensions are normally executed while Lampa is starting,
+         * and many plugins register their own app-ready listener. Loading them only
+         * after ready can make some providers miss their initialization phase.
+         */
+        if (typeof window.Lampa === 'undefined') {
+            setTimeout(bootstrap, 100);
+            return;
+        }
+
         log('start v' + PACK_VERSION);
-
-        // Small delay after Lampa reports ready, so base UI/plugins can initialize first.
-        setTimeout(function () {
-            run(0);
-        }, 250);
+        run(0);
     }
 
-    if (window.appready) {
-        start();
-    } else if (window.Lampa && Lampa.Listener && Lampa.Listener.follow) {
-        Lampa.Listener.follow('app', function (event) {
-            if (event && event.type === 'ready') start();
-        });
-    } else {
-        // Fallback for unusual builds.
-        setTimeout(start, 1200);
-    }
+    bootstrap();
 })();
