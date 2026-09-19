@@ -1,17 +1,17 @@
 /*
  * K2 Plugin Manager for Lampa
  * File: 1.js
- * Version: 2.3.0
+ * Version: 3.2.0
  *
- * Secure Lampac pairing:
- *   QR -> K2 Gateway -> Admin PIN -> unique per-TV token
+ * K2 Lampac pairing:
+ *   QR -> K2 сервер -> Admin PIN -> unique per-TV token
  *
- * Public Funnel URL is safe to embed; NO secret token is embedded here.
+ * Public сервер URL is safe to embed; NO secret token is embedded here.
  */
 (function () {
     'use strict';
 
-    var VERSION = '2.3.0';
+    var VERSION = '3.2.0';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -25,9 +25,29 @@
     var SISI_ON_KEY = 'k2pm_lampac_sisi';
     var REGISTERED_ONLINE_KEY = 'k2pm_registered_lampac_online';
     var REGISTERED_SISI_KEY = 'k2pm_registered_lampac_sisi';
+    var PROFILE_VERSION_KEY = 'k2pm_profile_version';
+    var START_PAGE_KEY = 'k2pm_start_page';
+    var IPTV_PRESET_KEY = 'k2pm_iptv_preset';
+    var PROFILE_VERSION = 310;
+    var HEALTH_CACHE_KEY = 'k2pm_plugin_health_v1';
+    var HEALTH_AUTO_KEY = 'k2pm_plugin_health_auto';
+    var HEALTH_TTL = 6 * 60 * 60 * 1000;
+    var healthBusy = false;
+    var currentSettingsBody = null;
 
-    if (window.__K2_PLUGIN_MANAGER_230__) return;
-    window.__K2_PLUGIN_MANAGER_230__ = true;
+    var IPTV_PRESETS = {
+        ua: {title:'🇺🇦 Україна — публічні канали',url:'https://iptv-org.github.io/iptv/countries/ua.m3u'},
+        ukr: {title:'🇺🇦 Україномовні — весь світ',url:'https://iptv-org.github.io/iptv/languages/ukr.m3u'},
+        sports: {title:'⚽ Спорт — світ',url:'https://iptv-org.github.io/iptv/categories/sports.m3u'},
+        news: {title:'📰 Новини — світ',url:'https://iptv-org.github.io/iptv/categories/news.m3u'},
+        movies: {title:'🎬 Кіно — світ',url:'https://iptv-org.github.io/iptv/categories/movies.m3u'},
+        kids: {title:'🧒 Дитячі — світ',url:'https://iptv-org.github.io/iptv/categories/kids.m3u'},
+        music: {title:'🎵 Музика — світ',url:'https://iptv-org.github.io/iptv/categories/music.m3u'},
+        world: {title:'🌍 Усі категорії — світ',url:'https://iptv-org.github.io/iptv/index.category.m3u'}
+    };
+
+    if (window.__K2_PLUGIN_MANAGER_320__) return;
+    window.__K2_PLUGIN_MANAGER_320__ = true;
 
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.dcma = false;
@@ -41,38 +61,71 @@
         '</svg>';
 
     var PLUGINS = [
+        // ONLINE — багато джерел одразу після встановлення K2.
         {id:'online_mod',cat:'online',name:'Online MOD',desc:'Основне онлайн-джерело з власним вибором балансерів.',url:'https://nb557.github.io/plugins/online_mod.js',on:true},
+        {id:'cinema',cat:'online',name:'Cinema',desc:'Окремий community-плагін для фільмів/серіалів і навігації.',url:'https://bylampa.github.io/cinema.js',on:true},
         {id:'filmix',cat:'online',name:'Filmix',desc:'Окреме джерело Filmix.',url:'https://lampaplugins.github.io/store/fx.js',on:true},
-        {id:'bwa',cat:'online',name:'BWA Online',desc:'Додаткове онлайн-джерело.',url:'http://bwa.ad/rc',on:true},
+        {id:'prestige',cat:'online',name:'Prestige',desc:'Додаткове онлайн-джерело з актуального community-каталогу.',url:'https://bwa.to/plugins/prestige.js',on:true},
+        {id:'nmprs',cat:'online',name:'NMPRS 4K',desc:'Додаткове онлайн-джерело з підтримкою 4K.',url:'https://num.jac-red.ru/plugin/nmprs.js',on:true},
+        {id:'smotret24',cat:'online',name:'Smotret24',desc:'Ще одне безкоштовне онлайн-джерело Full HD.',url:'http://smotret24.ru/online.js',on:true},
+        {id:'videocdn',cat:'online',name:'VideoCDN',desc:'Резервне відеоджерело. HTTP, тому на окремих збірках може блокуватися.',url:'http://skaz.tv/vcdn.js',on:true},
+        {id:'bwa',cat:'online',name:'BWA Online',desc:'Додаткове онлайн-джерело.',url:'https://bwa.to/rc',on:true},
         {id:'showy',cat:'online',name:'Showy',desc:'Додатковий онлайн-кінотеатр. HTTP-джерело.',url:'http://showy.online/m.js',on:true},
-        {id:'modss',cat:'online',name:"MODS's",desc:'Онлайн-перегляд і додаткові налаштування.',url:'http://lampa.stream/modss',on:true},
-        {id:'stream1',cat:'online',name:'Online Stream',desc:'Резервне онлайн-джерело.',url:'http://arkmv.ru/vod',on:false},
-        {id:'stream2',cat:'online',name:'Online Stream 2',desc:'Ще одне резервне онлайн-джерело.',url:'http://llpp.in/v/vod.js',on:false},
+        {id:'modss',cat:'online',name:"MODS's",desc:'Колекція балансерів і додаткових онлайн-джерел.',url:'http://lampa.stream/modss',on:true},
+        {id:'stream1',cat:'online',name:'Online Stream',desc:'Онлайн-джерело з кількома балансерами.',url:'http://arkmv.ru/vod',on:true},
+        {id:'stream2',cat:'online',name:'Online Stream 2',desc:'Додаткове резервне онлайн-джерело.',url:'http://llpp.in/v/vod.js',on:true},
 
+        // TORRENTS — TorrServer уже локально на LG.
         {id:'etor',cat:'torrent',name:'Etor: Parser + TorrServer',desc:'На LG/Tizen відкриває штатні пункти Парсер і TorrServer.',url:'http://cub.red/plugin/etor',on:true},
         {id:'pubtorr',cat:'torrent',name:'PubTorr',desc:'Публічні торрент-парсери без власного Jackett.',url:'https://lampame.github.io/main/pubtorr.js',on:true},
         {id:'ts_settings',cat:'torrent',name:'TorrServer Settings',desc:'Керування налаштуваннями TorrServer з Lampa.',url:'https://lampaplugins.github.io/store/pavelpikta/torrserver-settings.js',on:true},
         {id:'torrent_styles',cat:'torrent',name:'Torrent Styles MOD V2',desc:'Зручніший список торрентів: розмір, сіди, піри, бітрейт.',url:'https://lampaplugins.github.io/store/torrent_styles_v2.js',on:true},
         {id:'ts_preload',cat:'torrent',name:'TS Preload',desc:'Показує буферизацію TorrServer.',url:'https://plugin.rootu.top/ts-preload.js',on:true},
-        {id:'no_autostart',cat:'torrent',name:'No Autostart',desc:'Не запускає торрент автоматично.',url:'https://lampaplugins.github.io/store/no-autostart.js',on:true},
+        {id:'no_autostart',cat:'torrent',name:'No Autostart',desc:'Не запускає торрент автоматично — спочатку дає вибір.',url:'https://lampaplugins.github.io/store/no-autostart.js',on:true},
 
+        // 18+
         {id:'bwa18',cat:'adult',name:'BWA 18+',desc:'18+ агрегатор із багатьма джерелами.',url:'http://bwa.ad/re',on:false},
         {id:'xsena18',cat:'adult',name:'Xsena 18+',desc:'18+ агрегатор із великою кількістю джерел.',url:'http://e.xsena.red',on:false},
 
-        {id:'collections',cat:'collections',name:'Netflix / Apple TV / HBO Max',desc:'Категорії стримінгових сервісів.',url:'https://tvigl.github.io/plugins/collections.js',on:true},
-        {id:'cinema_picks',cat:'collections',name:'Підбірки кінотеатрів',desc:'Підбірки від онлайн-кінотеатрів, мультфільми й мультсеріали.',url:'https://lampaplugins.github.io/store/p.js',on:true},
-        {id:'more_categories',cat:'collections',name:'Додаткові категорії',desc:'Ще більше тематичних категорій.',url:'https://lampame.github.io/main/nc/nc.js',on:false},
+        // COLLECTIONS
+        {id:'collections',cat:'collections',name:'Netflix / Apple TV / HBO Max',desc:'Категорії стримінгових сервісів у каталозі Lampa.',url:'https://tvigl.github.io/plugins/collections.js',on:true},
+        {id:'more_categories',cat:'collections',name:'Додаткові категорії',desc:'Ще більше тематичних категорій і підбірок.',url:'https://lampame.github.io/main/nc/nc.js',on:true},
+        {id:'dorama_direct',cat:'collections',name:'Дорами',desc:'Окремий розділ дорам. За замовчуванням OFF, щоб не дублювати інші каталоги.',url:'https://tvigl.github.io/plugins/dorama.js',on:false},
         {id:'surs',cat:'collections',name:'SURS',desc:'Динамічні підбірки за жанрами, сервісами та популярністю.',url:'https://aviamovie.github.io/surs.js',on:false},
 
-        {id:'sport',cat:'tv',name:'Sport (CUB)',desc:'Спортивний розділ CUB.',url:'https://cub.red/plugin/sport',on:false},
-        {id:'iptv',cat:'tv',name:'IPTV M3U + EPG',desc:'Свій M3U-плейлист, групи каналів та EPG.',url:'https://cdn.jsdelivr.net/gh/smackftw/lampa_iptv@main/dist/lampa-iptv.js',on:false},
-        {id:'skaz_tv',cat:'tv',name:'TV by Skaz',desc:'Телебачення / IPTV. HTTP-джерело.',url:'http://skaz.tv/tv.js',on:false},
+        // TV / IPTV / SPORT
+        {id:'iptv',cat:'tv',name:'IPTV M3U + EPG',desc:'M3U, групи каналів, EPG, обране, історія й пошук. K2 має готові безкоштовні пресети.',url:'https://cdn.jsdelivr.net/gh/smackftw/lampa_iptv@main/dist/lampa-iptv.js',on:true},
+        {id:'sport',cat:'tv',name:'Sport (CUB)',desc:'Додатковий спортивний розділ CUB.',url:'https://cub.red/plugin/sport',on:true},
+        {id:'cinema_archive',cat:'tv',name:'Cinema Archive',desc:'Додатковий TV/архів-плагін.',url:'https://bywolf88.github.io/lampa-plugins/cinemabywolf.js',on:true},
+        {id:'diesel_tv',cat:'tv',name:'Diesel TV',desc:'Додатковий TV-плагін; за замовчуванням OFF.',url:'https://andreyurl54.github.io/diesel5/diesel.js',on:false},
+        {id:'skaz_tv',cat:'tv',name:'TV by Skaz',desc:'Додаткове IPTV/TV HTTP-джерело.',url:'http://skaz.tv/tv.js',on:false},
 
-        {id:'subs',cat:'utils',name:'Improved Subtitles',desc:'Покращені субтитри; корисно на LG webOS.',url:'https://adambenhassen.github.io/subs.js',on:true},
+        // DESIGN — безпечні модулі ON, агресивні редизайни OFF.
+        {id:'logo_title',cat:'design',name:'Logo Instead Title',desc:'Показує логотип замість простого текстового заголовка. Легкий мод.',url:'https://lampaplugins.github.io/store/logo.js',on:true},
+        {id:'maxsm_ratings',cat:'design',name:'Maxsm Ratings',desc:'Акуратні рейтинги на картках без повного редизайну.',url:'https://tvigl.github.io/plugins/maxsm_ratings.js',on:true},
+        {id:'surs_quality',cat:'design',name:'Surs Quality',desc:'Показує доступну якість на картках.',url:'https://tvigl.github.io/plugins/surs_quality.js',on:true},
+        {id:'tv_buttons',cat:'design',name:'TV Buttons',desc:'Зручні кнопки/іконки у виборі джерел.',url:'https://apxubatop.github.io/lmpPlugs/tvbutton.js',on:true},
+        {id:'categories_nav',cat:'design',name:'Categories',desc:'Додаткові категорії та зручніша навігація.',url:'https://lampame.github.io/main/newcategory.js',on:true},
+        {id:'interface_enhancement',cat:'design',name:'Interface Enhancement',desc:'Сильніше змінює інтерфейс. OFF, щоб не повторити проблему з карткою фільму.',url:'https://bylampa.github.io/interface.js',on:false},
+        {id:'gold_theme',cat:'design',name:'Golden Theme',desc:'Золотиста тема оформлення.',url:'https://bazzzilius.github.io/scripts/gold_theme.js',on:false},
+        {id:'new_interface',cat:'design',name:'New Interface',desc:'Повний альтернативний інтерфейс — експериментальний.',url:'https://bywolf88.github.io/lampa-plugins/interface_mod_new.js',on:false},
+        {id:'cardify',cat:'design',name:'Cardify',desc:'Суттєво змінює картки. OFF через можливі конфлікти.',url:'https://bylampa.github.io/cardify.js',on:false},
+        {id:'themes',cat:'design',name:'Themes',desc:'Додаткові теми оформлення.',url:'https://bylampa.github.io/themes.js',on:false},
+        {id:'start_screen',cat:'design',name:'Start Screen',desc:'Кастомізація стартового екрану. Не потрібен для старту з Історії.',url:'https://bylampa.github.io/start.js',on:false},
+        {id:'top_bar',cat:'design',name:'Top Bar',desc:'Додаткова верхня інформаційна панель.',url:'https://tvigl.github.io/plugins/top_bar.js',on:false},
+        {id:'head_filter',cat:'design',name:'Налаштування шапки',desc:'Дозволяє приховувати зайві елементи верхньої панелі.',url:'https://and7ey.github.io/lampa/head_filter.js',on:false},
+        {id:'source_enhancement',cat:'design',name:'Source Enhancement',desc:'Додаткові постери/метадані та оформлення джерел.',url:'https://bylampa.github.io/source.js',on:false},
+
+        // USEFUL
+        {id:'subs',cat:'utils',name:'Improved Subtitles',desc:'Покращені субтитри; особливо корисно на LG webOS.',url:'https://adambenhassen.github.io/subs.js',on:true},
+        {id:'source_sort',cat:'utils',name:'Сортування онлайн-джерел',desc:'Керує порядком джерел, коли їх багато.',url:'https://tvigl.github.io/plugins/source_sort.js',on:true},
+        {id:'balancer_sanitizer',cat:'utils',name:'Очищення балансерів',desc:'Допомагає прибирати непотрібні/проблемні балансери.',url:'https://levende.github.io/lampa-plugins/balancer-sanitizer.js',on:true},
+        {id:'history_filter',cat:'utils',name:'Фільтр історії',desc:'Покращує роботу зі списком історії — корисно, бо K2 стартує з Історії.',url:'https://levende.github.io/lampa-plugins/history-filter.js',on:true},
+        {id:'lampac_filter',cat:'utils',name:'Lampac Source Filter',desc:'Фільтр джерел Lampac. OFF, щоб спочатку показувати максимум.',url:'https://levende.github.io/lampa-plugins/lampac-src-filter.js',on:false},
+        {id:'itunes_trailers',cat:'utils',name:'Трейлери iTunes',desc:'Додаткове джерело трейлерів.',url:'https://plugin.rootu.top/trailers.js',on:true},
         {id:'yummy',cat:'utils',name:'YummyAnime',desc:'Аніме-каталог, списки, рейтинги та прогрес.',url:'https://yummyanime.github.io/yummy-lampa-plugin/stable/index.js',on:false},
         {id:'qr_keyboard',cat:'utils',name:'QR-клавіатура',desc:'Введення тексту в Lampa з телефона через QR.',url:'https://fv.plymo.ru/p/kb.js',on:false},
-        {id:'trailers_itunes',cat:'utils',name:'Трейлери iTunes',desc:'Альтернативне джерело трейлерів.',url:'https://plugin.rootu.top/trailers.js',on:false},
-        {id:'cub_rating',cat:'utils',name:'Рейтинг CUB',desc:'Додатковий рейтинг CUB.',url:'https://plugin.rootu.top/cub-rating.js',on:false},
+        {id:'cub_rating',cat:'utils',name:'Рейтинг CUB',desc:'Додатковий рейтинг CUB. OFF, бо вже є Maxsm Ratings.',url:'https://plugin.rootu.top/cub-rating.js',on:false},
         {id:'record',cat:'utils',name:'Радіо Record',desc:'Радіо Record прямо в Lampa.',url:'https://lampaplugins.github.io/store/record.js',on:false},
         {id:'somafm',cat:'utils',name:'SomaFM',desc:'Безкоштовні інтернет-радіостанції SomaFM.',url:'https://tsynik.github.io/lampa/soma.js',on:false}
     ];
@@ -82,7 +135,8 @@
         torrent:'🧲 ТОРРЕНТИ / TORRSERVER',
         adult:'🔞 18+',
         collections:'🍿 NETFLIX / APPLE TV / HBO / ПІДБІРКИ',
-        tv:'📺 ТБ / СПОРТ',
+        tv:'📺 IPTV / ТБ / СПОРТ',
+        design:'🎨 ДИЗАЙН',
         utils:'🛠 КОРИСНЕ'
     };
 
@@ -178,8 +232,15 @@
     }
 
     function baseUrl() {
-        var u = '';
-        try { u = Lampa.Storage.get(FUNNEL_KEY, DEFAULT_FUNNEL) || DEFAULT_FUNNEL; } catch (e) { u = DEFAULT_FUNNEL; }
+        var u = DEFAULT_FUNNEL;
+
+        // Migration only: if an older version already stored the same server URL,
+        // accept it internally, but never expose it in the settings UI.
+        try {
+            var old = Lampa.Storage.get(FUNNEL_KEY, '');
+            if (old) u = old;
+        } catch (e) {}
+
         u = String(u).trim().replace(/\/+$/, '');
         if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
         return u;
@@ -397,7 +458,6 @@
                         Lampa.Storage.set(CLIENT_TOKEN_KEY, r.client_token);
                         Lampa.Storage.set(DEVICE_ID_KEY, r.device_id || '');
                         Lampa.Storage.set(DEVICE_NAME_KEY, r.device_name || 'LG TV');
-                        Lampa.Storage.set(FUNNEL_KEY, r.base_url || baseUrl());
                         Lampa.Storage.set(LAMPAC_ON_KEY, true);
                     } catch (e) {}
 
@@ -426,7 +486,7 @@
             if (!r.ok || !r.pair_id) return notify('K2: шлюз не створив сесію');
             showPairModal(r);
         }, function(r) {
-            notify('K2: Gateway недоступний або pairing заблокований');
+            notify('K2: Сервер K2 Lampac недоступний або pairing тимчасово заблокований');
         });
     }
 
@@ -434,9 +494,9 @@
         var t = clientToken();
         if (!t) return notify('K2 Lampac ще не підключений. Використай QR pairing.');
         ajax('GET', baseUrl() + '/k2/me?token=' + encodeURIComponent(t), null, function(r) {
-            if (r.ok) notify('✓ Secure Lampac: ' + (r.device_name || 'TV') + ' авторизований');
+            if (r.ok) notify('✓ K2 Lampac: ' + (r.device_name || 'TV') + ' авторизований');
             else notify('✕ Token не прийнято');
-        }, function(){ notify('✕ Secure Lampac недоступний'); });
+        }, function(){ notify('✕ K2 Lampac недоступний'); });
     }
 
     function forgetSecureLampac() {
@@ -465,8 +525,292 @@
             clearLocal();
         }, function() {
             clearLocal();
-            notify('Token видалено з TV, але Gateway був недоступний для відкликання.');
+            notify('Token видалено з TV, але сервер був недоступний для відкликання.');
         });
+    }
+
+    function getStorage(name, def) {
+        try {
+            var value = Lampa.Storage.get(name, def);
+            return typeof value === 'undefined' || value === null ? def : value;
+        } catch (e) {
+            return def;
+        }
+    }
+
+    function setStorage(name, value) {
+        try { Lampa.Storage.set(name, value); } catch (e) {}
+    }
+
+    function setStartPage(value, quiet) {
+        var allowed = {
+            'favorite@history':1,
+            'main':1,
+            'favorite@bookmarks':1,
+            'mytorrents':1,
+            'last':1
+        };
+        if (!allowed[value]) value = 'favorite@history';
+        setStorage(START_PAGE_KEY, value);
+        setStorage('start_page', value);
+        if (!quiet) notify('Стартова сторінка змінена. Застосується після наступного запуску Lampa.');
+    }
+
+    function applyIptvPreset(value, quiet) {
+        var preset = IPTV_PRESETS[value] || IPTV_PRESETS.ua;
+        setStorage(IPTV_PRESET_KEY, IPTV_PRESETS[value] ? value : 'ua');
+        setStorage('liptv_m3u_url', preset.url);
+        setStorage('liptv_epg_source', 'auto');
+        if (!getStorage('liptv_view_mode', '')) setStorage('liptv_view_mode', 'list');
+        if (!quiet) notify('IPTV: ' + preset.title + '. EPG = Авто.');
+    }
+
+    function applyGlassPreset(quiet) {
+        setStorage('animation', true);
+        setStorage('background', true);
+        setStorage('glass_style', true);
+        setStorage('glass_opacity', 'medium');
+        setStorage('black_style', false);
+        setStorage('advanced_animation', false);
+        setStorage('card_quality', true);
+        setStorage('card_episodes', true);
+        if (!quiet) notify('✓ K2 Glass застосовано. Якщо вигляд не оновився одразу — перезапусти Lampa.');
+    }
+
+    function applyOledPreset() {
+        setStorage('animation', true);
+        setStorage('background', true);
+        setStorage('glass_style', true);
+        setStorage('glass_opacity', 'blacked');
+        setStorage('black_style', true);
+        setStorage('advanced_animation', false);
+        setStorage('card_quality', true);
+        setStorage('card_episodes', true);
+        notify('✓ K2 OLED Black застосовано.');
+    }
+
+    function applyStandardLook() {
+        setStorage('glass_style', false);
+        setStorage('black_style', false);
+        setStorage('animation', true);
+        setStorage('background', true);
+        notify('✓ Повернуто базове оформлення Lampa. Зовнішні дизайн-плагіни керуються окремо.');
+    }
+
+    function pluginById(id) {
+        for (var i = 0; i < PLUGINS.length; i++) if (PLUGINS[i].id === id) return PLUGINS[i];
+        return null;
+    }
+
+    function applyV310Migration() {
+        var version = parseInt(getStorage(PROFILE_VERSION_KEY, 0), 10) || 0;
+        if (version >= PROFILE_VERSION) return;
+
+        // New K2 defaults requested for this upgrade.
+        [
+            'online_mod','cinema','filmix','prestige','nmprs','smotret24','videocdn','bwa','showy','modss','stream1','stream2',
+            'etor','pubtorr','ts_settings','torrent_styles','ts_preload','no_autostart',
+            'collections','more_categories',
+            'iptv','sport','cinema_archive',
+            'logo_title','maxsm_ratings','surs_quality','tv_buttons','categories_nav',
+            'subs','source_sort','balancer_sanitizer','history_filter','itunes_trailers'
+        ].forEach(function(id) {
+            var p = pluginById(id);
+            if (p) setEnabled(p, true);
+        });
+
+        // Keep adult and aggressive full redesigns opt-in.
+        ['bwa18','xsena18','interface_enhancement','gold_theme','new_interface','cardify','themes','start_screen','top_bar','head_filter','source_enhancement']
+            .forEach(function(id) {
+                var p = pluginById(id);
+                if (p) setEnabled(p, false);
+            });
+
+        setStartPage('favorite@history', true);
+        applyIptvPreset('ua', true);
+        applyGlassPreset(true);
+        setStorage(PROFILE_VERSION_KEY, PROFILE_VERSION);
+    }
+
+
+    function healthCache() {
+        try {
+            var c = Lampa.Storage.get(HEALTH_CACHE_KEY, null);
+            return c && typeof c === 'object' ? c : null;
+        } catch (e) { return null; }
+    }
+
+    function setHealthCache(c) {
+        try { Lampa.Storage.set(HEALTH_CACHE_KEY, c || null); } catch (e) {}
+    }
+
+    function healthItems() {
+        var list = [];
+        PLUGINS.forEach(function(p) {
+            list.push({id:p.id,name:p.name,url:p.url});
+        });
+
+        var t = clientToken();
+        if (t) {
+            list.push({id:'__lampac_online',name:'Lampac Online',url:secureOnlineUrl()});
+            list.push({id:'__lampac_sisi',name:'SISI',url:secureSisiUrl()});
+        }
+        return list;
+    }
+
+    function healthMap() {
+        var c = healthCache(), m = {};
+        if (!c || !c.results) return m;
+        for (var i=0;i<c.results.length;i++) {
+            if (c.results[i] && c.results[i].id) m[c.results[i].id] = c.results[i];
+        }
+        return m;
+    }
+
+    function healthStatusText(r) {
+        if (!r) return {cls:'unknown',text:'? не перевірено'};
+        if (r.state === 'ok') return {cls:'ok',text:'✓ доступний'};
+        if (r.state === 'warn') {
+            return {cls:'warn',text:r.http ? ('⚠ HTTP '+r.http) : '⚠ відповідає'};
+        }
+        if (r.state === 'blocked') return {cls:'warn',text:'⚠ перевірку заблоковано'};
+        return {cls:'dead',text:r.http ? ('✕ HTTP '+r.http) : '✕ недоступний'};
+    }
+
+    function healthRow(body, dataName, result) {
+        if (!body || !body.length) return;
+        var row = body.find('[data-name="'+dataName+'"]').first();
+        if (!row.length) return;
+
+        row.find('.k2pm-health').remove();
+        var s = healthStatusText(result);
+        var extra = '';
+        if (result && result.ms) extra = ' · '+result.ms+' ms';
+
+        row.append(
+            $('<div class="k2pm-health k2pm-health-'+s.cls+'">'+s.text+extra+'</div>')
+        );
+    }
+
+    function renderHealth(body) {
+        if (!body || !body.length) return;
+        var map = healthMap();
+
+        PLUGINS.forEach(function(p) {
+            healthRow(body, key(p), map[p.id]);
+        });
+
+        healthRow(body, LAMPAC_ON_KEY, map.__lampac_online);
+        healthRow(body, SISI_ON_KEY, map.__lampac_sisi);
+
+        var c = healthCache();
+        var line = body.find('.k2pm-health-summary').first();
+        if (!line.length) {
+            line = $('<div class="k2pm-health-summary"></div>');
+            var trigger = body.find('[data-name="k2pm_check_plugins"]').first();
+            if (trigger.length) trigger.before(line);
+        }
+
+        if (!c || !c.checked_at) {
+            line.html('Статус джерел: ще не перевірено');
+            return;
+        }
+
+        var sum = c.summary || {};
+        var dt = new Date(c.checked_at * 1000);
+        var tm = '';
+        try {
+            tm = ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2);
+        } catch(e) {}
+
+        line.html(
+            'Статус джерел: <b>✓ '+(sum.ok||0)+'</b> · '+
+            '<b>⚠ '+((sum.warn||0)+(sum.blocked||0))+'</b> · '+
+            '<b>✕ '+(sum.dead||0)+'</b>'+
+            (tm ? ' · перевірено '+tm : '')
+        );
+    }
+
+    function checkAllPlugins(manual) {
+        if (healthBusy) {
+            if (manual) notify('Перевірка вже виконується…');
+            return;
+        }
+
+        var token = clientToken();
+        if (!token) {
+            if (manual) notify('Спочатку підключи K2 Lampac через QR.');
+            return;
+        }
+
+        healthBusy = true;
+        if (manual) notify('Перевіряю всі джерела…');
+
+        if (currentSettingsBody && currentSettingsBody.length) {
+            currentSettingsBody.find('.k2pm-health-summary').html('⌛ Перевіряю джерела…');
+        }
+
+        try {
+            var x = new XMLHttpRequest();
+            x.open('POST', baseUrl() + '/k2/plugin-health', true);
+            x.timeout = 45000;
+            x.setRequestHeader('Content-Type','application/json');
+
+            x.onload = function() {
+                healthBusy = false;
+                var r = null;
+                try { r = JSON.parse(x.responseText || '{}'); } catch(e) {}
+
+                if (x.status >= 200 && x.status < 300 && r && r.ok) {
+                    setHealthCache(r);
+                    if (currentSettingsBody && currentSettingsBody.length) {
+                        renderHealth(currentSettingsBody);
+                    }
+
+                    if (manual) {
+                        var s = r.summary || {};
+                        notify(
+                            'K2: ✓ '+(s.ok||0)+
+                            ' · ⚠ '+((s.warn||0)+(s.blocked||0))+
+                            ' · ✕ '+(s.dead||0)
+                        );
+                    }
+                } else if (manual) {
+                    notify('Не вдалося отримати статус плагінів.');
+                }
+            };
+
+            x.onerror = function() {
+                healthBusy = false;
+                if (manual) notify('Сервер перевірки недоступний.');
+            };
+
+            x.ontimeout = function() {
+                healthBusy = false;
+                if (manual) notify('Перевірка зайняла занадто багато часу.');
+            };
+
+            x.send(JSON.stringify({
+                token: token,
+                plugins: healthItems()
+            }));
+        } catch(e) {
+            healthBusy = false;
+            if (manual) notify('Помилка перевірки плагінів.');
+        }
+    }
+
+    function maybeAutoHealth() {
+        var auto = true;
+        try { auto = bool(Lampa.Storage.get(HEALTH_AUTO_KEY, true)); } catch(e) {}
+
+        if (!auto || !clientToken() || healthBusy) return;
+
+        var c = healthCache();
+        var stale = !c || !c.checked_at ||
+            ((Date.now() - c.checked_at*1000) > HEALTH_TTL);
+
+        if (stale) setTimeout(function(){ checkAllPlugins(false); }, 700);
     }
 
     function setTorrServer(v) {
@@ -506,12 +850,6 @@
 
         addParam({
             component:COMPONENT,
-            param:{name:FUNNEL_KEY,type:'input',values:'',default:DEFAULT_FUNNEL},
-            field:{name:'Secure Lampac — Funnel URL',description:'Уже встановлено твій K2 Funnel. Змінюй тільки якщо адреса Tailscale зміниться.'}
-        });
-
-        addParam({
-            component:COMPONENT,
             param:{name:'k2pm_pair_secure',type:'trigger',default:false},
             field:{name:'📱 Підключити Lampac через QR',description:'TV покаже QR і короткий код. На телефоні вводиш тільки K2 Admin PIN.'},
             onChange:function(){
@@ -519,31 +857,15 @@
                 startPairing();
             }
         });
-
-        addParam({
-            component:COMPONENT,
-            param:{name:LAMPAC_ON_KEY,type:'trigger',default:true},
-            field:{name:'Lampac Online',description:'Всі онлайн-провайдери твого віддаленого Lampac через захищений Funnel.'},
-            onChange:function(){syncSecureLampac(true);needRestart(true);}
-        });
-
-        addParam({
-            component:COMPONENT,
-            param:{name:SISI_ON_KEY,type:'trigger',default:false},
-            field:{name:'Lampac SISI 18+',description:'SISI з віддаленого Lampac. Потрібне попереднє QR-підключення.'},
-            onChange:function(){syncSecureLampac(true);needRestart(true);}
-        });
-
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_check_secure',type:'trigger',default:false},
-            field:{name:'Перевірити Secure Lampac',description:'Перевіряє Funnel і авторизацію цього телевізора.'},
+            field:{name:'Перевірити K2 Lampac',description:'Перевіряє сервер і авторизацію цього телевізора.'},
             onChange:function(){
                 try{Lampa.Storage.set('k2pm_check_secure',false);}catch(e){}
                 checkSecureLampac();
             }
         });
-
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_forget_secure',type:'trigger',default:false},
@@ -568,14 +890,118 @@
             onChange:function(){try{Lampa.Storage.set('k2pm_check_ts',false);}catch(e){}checkTorrServer();}
         });
 
-        PLUGINS.forEach(function(p){
+        addParam({
+            component:COMPONENT,
+            param:{name:'k2pm_check_plugins',type:'trigger',default:false},
+            field:{name:'🔎 Перевірити всі плагіни',description:'Перевірка кожного джерела через K2 сервер. Статус з’явиться прямо під кожним плагіном.'},
+            onChange:function(){
+                try{Lampa.Storage.set('k2pm_check_plugins',false);}catch(e){}
+                checkAllPlugins(true);
+            }
+        });
+
+        addParam({
+            component:COMPONENT,
+            param:{name:HEALTH_AUTO_KEY,type:'trigger',default:true},
+            field:{name:'Автоперевірка плагінів',description:'Оновлювати статуси автоматично приблизно раз на 6 годин.'}
+        });
+
+        // Startup / behavior.
+        addParam({
+            component:COMPONENT,
+            param:{
+                name:START_PAGE_KEY,
+                type:'select',
+                values:{
+                    'favorite@history':'Історія переглядів',
+                    'main':'Головна',
+                    'favorite@bookmarks':'Закладки',
+                    'mytorrents':'Мої торренти',
+                    'last':'Останній відкритий екран'
+                },
+                default:'favorite@history'
+            },
+            field:{name:'Стартова сторінка',description:'За замовчуванням K2 відкриває Історію переглядів.'},
+            onChange:function(v){setStartPage(v,false);}
+        });
+
+        // IPTV presets. Custom URL is still available in the IPTV plugin settings.
+        addParam({
+            component:COMPONENT,
+            param:{
+                name:IPTV_PRESET_KEY,
+                type:'select',
+                values:{
+                    ua:'🇺🇦 Україна — публічні канали',
+                    ukr:'🇺🇦 Україномовні — весь світ',
+                    sports:'⚽ Спорт — світ',
+                    news:'📰 Новини — світ',
+                    movies:'🎬 Кіно — світ',
+                    kids:'🧒 Дитячі — світ',
+                    music:'🎵 Музика — світ',
+                    world:'🌍 Усі категорії — світ'
+                },
+                default:'ua'
+            },
+            field:{name:'Готовий IPTV-плейлист',description:'Безкоштовні публічні списки. Окремі канали можуть змінюватися або бути геообмежені.'},
+            onChange:function(v){applyIptvPreset(v,false);}
+        });
+
+        // Built-in Lampa design presets. Safer than full card redesign plugins.
+        addParam({
+            component:COMPONENT,
+            param:{name:'k2pm_glass_preset',type:'trigger',default:false},
+            field:{name:'✨ K2 Glass',description:'Скло + фон + плавна анімація. Не перебудовує картку фільму.'},
+            onChange:function(){setStorage('k2pm_glass_preset',false);applyGlassPreset(false);}
+        });
+        addParam({
+            component:COMPONENT,
+            param:{name:'k2pm_oled_preset',type:'trigger',default:false},
+            field:{name:'◼ K2 OLED Black',description:'Темний режим для LG/OLED: чорний фон + затемнене скло.'},
+            onChange:function(){setStorage('k2pm_oled_preset',false);applyOledPreset();}
+        });
+        addParam({
+            component:COMPONENT,
+            param:{name:'k2pm_standard_look',type:'trigger',default:false},
+            field:{name:'↩ Стандартний вигляд Lampa',description:'Вимикає K2 Glass/Black; зовнішні дизайн-плагіни лишаються під своїми перемикачами.'},
+            onChange:function(){setStorage('k2pm_standard_look',false);applyStandardLook();}
+        });
+
+        function addPluginToggle(p) {
             addParam({
                 component:COMPONENT,
                 param:{name:key(p),type:'trigger',default:!!p.on},
                 field:{name:p.name,description:p.desc},
                 onChange:function(v){toggle(p,bool(v));}
             });
+        }
+
+        // ONLINE: Lampac Online is a normal source, just like the others.
+        addParam({
+            component:COMPONENT,
+            param:{name:LAMPAC_ON_KEY,type:'trigger',default:true},
+            field:{name:'Lampac Online',description:'Онлайн-джерела з твого K2 Lampac.'},
+            onChange:function(){syncSecureLampac(true);needRestart(true);}
         });
+        PLUGINS.forEach(function(p){ if(p.cat==='online') addPluginToggle(p); });
+
+        // TORRENTS
+        PLUGINS.forEach(function(p){ if(p.cat==='torrent') addPluginToggle(p); });
+
+        // 18+: SISI is intentionally a normal item in the same list.
+        addParam({
+            component:COMPONENT,
+            param:{name:SISI_ON_KEY,type:'trigger',default:false},
+            field:{name:'SISI',description:'18+ джерела SISI з K2 Lampac.'},
+            onChange:function(){syncSecureLampac(true);needRestart(true);}
+        });
+        PLUGINS.forEach(function(p){ if(p.cat==='adult') addPluginToggle(p); });
+
+        // COLLECTIONS / TV / DESIGN / UTILS
+        PLUGINS.forEach(function(p){ if(p.cat==='collections') addPluginToggle(p); });
+        PLUGINS.forEach(function(p){ if(p.cat==='tv') addPluginToggle(p); });
+        PLUGINS.forEach(function(p){ if(p.cat==='design') addPluginToggle(p); });
+        PLUGINS.forEach(function(p){ if(p.cat==='utils') addPluginToggle(p); });
 
         addParam({
             component:COMPONENT,
@@ -591,10 +1017,13 @@
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_defaults',type:'trigger',default:false},
-            field:{name:'Рекомендований набір K2',description:'Онлайн + TorrServer + підбірки + субтитри. 18+/TV/експериментальні вимкнені.'},
+            field:{name:'Рекомендований набір K2',description:'Багато онлайн-джерел + торренти + IPTV UA + K2 Glass + безпечні дизайн-моди + корисні інструменти.'},
             onChange:function(){
                 try{Lampa.Storage.set('k2pm_defaults',false);}catch(e){}
                 PLUGINS.forEach(function(p){setEnabled(p,!!p.on);});
+                setStartPage('favorite@history',true);
+                applyIptvPreset('ua',true);
+                applyGlassPreset(true);
                 reconcile(true);needRestart(true);
                 notify('K2: рекомендований набір відновлено. Перезапусти Lampa.');
             }
@@ -615,27 +1044,52 @@
 
     function decorate(body) {
         if(!body||!body.length)return;
+        currentSettingsBody = body;
         style();body.find('.k2pm-head,.k2pm-cat').remove();
         var paired=!!clientToken(),restart=false;
         try{restart=bool(Lampa.Storage.get(RESTART_KEY,false));}catch(e){}
         body.prepend('<div class="k2pm-head"><b>K2 Plugin Manager v'+VERSION+'</b><br>'+
-            'Secure Lampac: '+(paired?'✓ підключено':'○ не підключено')+
+            'K2 Lampac: '+(paired?'✓ підключено':'○ не підключено')+
             ' · Плагінів: '+countEnabled()+
             (restart?'<br>⚠ Після вимкнення потрібен повний перезапуск Lampa.':'<br>✓ Менеджер активний.')+
             '</div>');
 
-        var sec=body.find('[data-name="'+FUNNEL_KEY+'"]').first();
-        if(sec.length)sec.before('<div class="k2pm-cat">☁ SECURE LAMPAC / QR PAIRING</div>');
+        var sec=body.find('[data-name="k2pm_pair_secure"]').first();
+        if(sec.length)sec.before('<div class="k2pm-cat">☁ K2 LAMPAC</div>');
         var ts=body.find('[data-name="k2pm_ts_url"]').first();
         if(ts.length)ts.before('<div class="k2pm-cat">⚙️ LG / TORRSERVER</div>');
 
+        var hs=body.find('[data-name="k2pm_check_plugins"]').first();
+        if(hs.length)hs.before('<div class="k2pm-cat">🩺 СТАН ПЛАГІНІВ</div>');
+
+        var sp=body.find('[data-name="'+START_PAGE_KEY+'"]').first();
+        if(sp.length)sp.before('<div class="k2pm-cat">🏠 ЗАПУСК / ПОВЕДІНКА</div>');
+
+        var ip=body.find('[data-name="'+IPTV_PRESET_KEY+'"]').first();
+        if(ip.length)ip.before('<div class="k2pm-cat">📺 IPTV — ГОТОВІ ПЛЕЙЛИСТИ</div>');
+
+        var look=body.find('[data-name="k2pm_glass_preset"]').first();
+        if(look.length)look.before('<div class="k2pm-cat">✨ K2 ВИГЛЯД</div>');
+
         Object.keys(CAT_TITLES).forEach(function(cat){
-            var first=null;
-            for(var i=0;i<PLUGINS.length;i++){if(PLUGINS[i].cat===cat){first=PLUGINS[i];break;}}
-            if(!first)return;
-            var row=body.find('[data-name="'+key(first)+'"]').first();
-            if(row.length)row.before('<div class="k2pm-cat">'+CAT_TITLES[cat]+'</div>');
+            var row = null;
+
+            if (cat === 'online') {
+                row = body.find('[data-name="'+LAMPAC_ON_KEY+'"]').first();
+            } else if (cat === 'adult') {
+                row = body.find('[data-name="'+SISI_ON_KEY+'"]').first();
+            }
+
+            if (!row || !row.length) {
+                var first=null;
+                for(var i=0;i<PLUGINS.length;i++){if(PLUGINS[i].cat===cat){first=PLUGINS[i];break;}}
+                if(first) row=body.find('[data-name="'+key(first)+'"]').first();
+            }
+
+            if(row && row.length)row.before('<div class="k2pm-cat">'+CAT_TITLES[cat]+'</div>');
         });
+
+        renderHealth(body);
     }
 
     function listenSettings() {
@@ -644,6 +1098,7 @@
                 if(!e||e.name!==COMPONENT)return;
                 setTimeout(function(){decorate(e.body);},0);
                 setTimeout(function(){decorate(e.body);},200);
+                setTimeout(function(){maybeAutoHealth();},500);
             });
         }catch(e){}
     }
@@ -653,11 +1108,11 @@
         window.__K2_PLUGIN_MANAGER_STARTED__=true;
 
         try{
-            if(!Lampa.Storage.get(FUNNEL_KEY,''))Lampa.Storage.set(FUNNEL_KEY,DEFAULT_FUNNEL);
             if(!Lampa.Storage.get('k2pm_ts_url',''))Lampa.Storage.set('k2pm_ts_url','http://127.0.0.1:8090');
             if(!Lampa.Storage.get('torrserver_url',''))Lampa.Storage.set('torrserver_url','http://127.0.0.1:8090');
         }catch(e){}
 
+        applyV310Migration();
         setupSettings();
         listenSettings();
         var r=reconcile(true);
@@ -668,7 +1123,9 @@
             pair:startPairing,
             sync:function(){return reconcile(true);},
             checkLampac:checkSecureLampac,
-            checkTorrServer:checkTorrServer
+            checkTorrServer:checkTorrServer,
+            checkPlugins:function(){checkAllPlugins(true);},
+            pluginHealth:healthCache
         };
         log('ready',r);
     }
