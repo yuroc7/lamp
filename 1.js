@@ -1,7 +1,7 @@
 /*
- * K2 Plugin Manager for Lampa
+ * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.0.0
+ * Version: 4.4.0
  *
  * K2 Lampac pairing:
  *   QR -> K2 сервер -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.0.0';
+    var VERSION = '4.4.0';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -56,26 +56,32 @@
     var HEALTH_SUPPRESS_KEY = 'k2pm_health_suppressed';
     var TORR_LAST_KEY = 'k2pm_torr_last_ok';
     var HEARTBEAT_TIMER = null;
+    var COMMAND_TIMER = null;
+    var REMOTE_ADMIN_UNTIL = 0;
+    var REMOTE_GUEST_UNTIL = 0;
+    var REMOTE_GUEST_POLLING = false;
+    var FULL_COMPONENT = 'k2_plugin_manager_full';
+    var FULL_OPENING = false;
     var healthBusy = false;
     var currentSettingsBody = null;
 
     var IPTV_PRESETS = {
-        ua: {title:'🇺🇦 Україна — кращі публічні канали',fallback:'https://iptv-org.github.io/iptv/countries/ua.m3u'},
-        ukr: {title:'🇺🇦 Україномовні — весь світ',fallback:'https://iptv-org.github.io/iptv/languages/ukr.m3u'},
-        football: {title:'⚽ Футбол — безкоштовні публічні',fallback:'https://iptv-org.github.io/iptv/categories/sports.m3u'},
-        sports: {title:'🏆 Спорт — світ',fallback:'https://iptv-org.github.io/iptv/categories/sports.m3u'},
-        kids_ua: {title:'🧒 Дітям — українське',fallback:'https://iptv-org.github.io/iptv/countries/ua.m3u'},
-        kids_world: {title:'🧸 Дітям — світ',fallback:'https://iptv-org.github.io/iptv/categories/kids.m3u'},
-        animation: {title:'🎨 Мультфільми / анімація',fallback:'https://iptv-org.github.io/iptv/categories/animation.m3u'},
-        education: {title:'📚 Пізнавальне / освіта',fallback:'https://iptv-org.github.io/iptv/categories/education.m3u'},
-        news: {title:'📰 Новини — світ',fallback:'https://iptv-org.github.io/iptv/categories/news.m3u'},
-        movies: {title:'🎬 Кіно — світ',fallback:'https://iptv-org.github.io/iptv/categories/movies.m3u'},
-        music: {title:'🎵 Музика — світ',fallback:'https://iptv-org.github.io/iptv/categories/music.m3u'},
-        world: {title:'🌍 Усі категорії — світ',fallback:'https://iptv-org.github.io/iptv/index.category.m3u'}
+        ua: {title:'Україна — кращі публічні канали',fallback:'https://iptv-org.github.io/iptv/countries/ua.m3u'},
+        ukr: {title:'Україномовні — весь світ',fallback:'https://iptv-org.github.io/iptv/languages/ukr.m3u'},
+        football: {title:'Футбол — безкоштовні публічні',fallback:'https://iptv-org.github.io/iptv/categories/sports.m3u'},
+        sports: {title:'Спорт — світ',fallback:'https://iptv-org.github.io/iptv/categories/sports.m3u'},
+        kids_ua: {title:'Дітям — українське',fallback:'https://iptv-org.github.io/iptv/countries/ua.m3u'},
+        kids_world: {title:'Дітям — світ',fallback:'https://iptv-org.github.io/iptv/categories/kids.m3u'},
+        animation: {title:'Мультфільми / анімація',fallback:'https://iptv-org.github.io/iptv/categories/animation.m3u'},
+        education: {title:'Пізнавальне / освіта',fallback:'https://iptv-org.github.io/iptv/categories/education.m3u'},
+        news: {title:'Новини — світ',fallback:'https://iptv-org.github.io/iptv/categories/news.m3u'},
+        movies: {title:'Кіно — світ',fallback:'https://iptv-org.github.io/iptv/categories/movies.m3u'},
+        music: {title:'Музика — світ',fallback:'https://iptv-org.github.io/iptv/categories/music.m3u'},
+        world: {title:'Усі категорії — світ',fallback:'https://iptv-org.github.io/iptv/index.category.m3u'}
     };
 
-    if (window.__K2_PLUGIN_MANAGER_400__) return;
-    window.__K2_PLUGIN_MANAGER_400__ = true;
+    if (window.__K2_PLUGIN_MANAGER_440__) return;
+    window.__K2_PLUGIN_MANAGER_440__ = true;
 
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.dcma = false;
@@ -167,14 +173,14 @@
     ];
 
     var CAT_TITLES = {
-        online:'🎬 ОНЛАЙН-КІНОТЕАТРИ / БАЛАНСЕРИ',
-        torrent:'🧲 ТОРРЕНТИ / TORRSERVER',
-        adult:'🔞 18+',
-        collections:'🍿 NETFLIX / APPLE TV / HBO / ПІДБІРКИ',
-        kids:'🧒 ДІТЯМ / МУЛЬТФІЛЬМИ',
-        tv:'📺 IPTV / ТБ / СПОРТ',
-        design:'🎨 ДИЗАЙН',
-        utils:'🛠 КОРИСНЕ'
+        online:'ОНЛАЙН-КІНОТЕАТРИ / БАЛАНСЕРИ',
+        torrent:'ТОРРЕНТИ / TORRSERVER',
+        adult:'18+',
+        collections:'NETFLIX / APPLE TV / HBO / ПІДБІРКИ',
+        kids:'ДІТЯМ / МУЛЬТФІЛЬМИ',
+        tv:'IPTV / ТБ / СПОРТ',
+        design:'ДИЗАЙН',
+        utils:'КОРИСНЕ'
     };
 
     function log() {
@@ -235,7 +241,7 @@
                 url:url,
                 status:1,
                 name:meta && meta.name ? meta.name : 'K2 plugin',
-                author:'K2 Plugin Manager'
+                author:'Y7 Media'
             });
             return true;
         } catch (e) { log('add error', url, e); return false; }
@@ -474,7 +480,7 @@
         }
 
         Lampa.Modal.open({
-            title:'K2 Lampac — безпечне підключення',
+            title:'Y7 Media — безпечне підключення',
             html:box,
             size:'medium',
             onBack:close
@@ -523,7 +529,7 @@
                     try { Lampa.Storage.set(MANAGED_KEY, managedList()); } catch (e2) {}
 
                     box.find('.k2-pair-state').html('✓ <b>Підключено.</b> Lampac Online додано автоматично.');
-                    notify('✓ K2 Lampac підключено');
+                    notify('✓ Y7 Core підключено');
                     setTimeout(close, 1800);
                     return;
                 }
@@ -544,17 +550,17 @@
             if (!r.ok || !r.pair_id) return notify('K2: шлюз не створив сесію');
             showPairModal(r);
         }, function(r) {
-            notify('K2: Сервер K2 Lampac недоступний або pairing тимчасово заблокований');
+            notify('K2: Сервер Y7 Core недоступний або pairing тимчасово заблокований');
         });
     }
 
     function checkSecureLampac() {
         var t = clientToken();
-        if (!t) return notify('K2 Lampac ще не підключений. Використай QR pairing.');
+        if (!t) return notify('Y7 Core ще не підключений. Використай QR.');
         ajax('GET', baseUrl() + '/k2/me?token=' + encodeURIComponent(t), null, function(r) {
-            if (r.ok) notify('✓ K2 Lampac: ' + (r.device_name || 'TV') + ' авторизований');
+            if (r.ok) notify('✓ Y7 Core: ' + (r.device_name || 'TV') + ' авторизований');
             else notify('✕ Token не прийнято');
-        }, function(){ notify('✕ K2 Lampac недоступний'); });
+        }, function(){ notify('✕ Y7 Core недоступний'); });
     }
 
     function forgetSecureLampac() {
@@ -642,7 +648,7 @@
         setStorage('advanced_animation', false);
         setStorage('card_quality', true);
         setStorage('card_episodes', true);
-        if (!quiet) notify('✓ K2 Glass застосовано. Якщо вигляд не оновився одразу — перезапусти Lampa.');
+        if (!quiet) notify('✓ Y7 Glass застосовано. Якщо вигляд не оновився одразу — перезапусти Lampa.');
     }
 
     function applyOledPreset() {
@@ -654,7 +660,7 @@
         setStorage('advanced_animation', false);
         setStorage('card_quality', true);
         setStorage('card_episodes', true);
-        notify('✓ K2 OLED Black застосовано.');
+        notify('✓ Y7 OLED Black застосовано.');
     }
 
     function applyStandardLook() {
@@ -719,14 +725,14 @@
         var t=clientToken(); if(!t)return notify('Спочатку підключи K2 Lampac.');
         ajax('GET',k2Api('/k2/system-health?token='+encodeURIComponent(t)),null,function(r){
             var x=r.runtime||{}, tv=r.tv||{}, p=r.providers||{};
-            var h='<b>K2 SYSTEM</b><br><br>'+ 
+            var h='<b>Y7 SYSTEM</b><br><br>'+ 
                 'Gateway: ✓<br>'+ 'Lampac: '+(r.lampac&&r.lampac.ok?'✓':'✕')+(r.lampac&&r.lampac.ms?' · '+r.lampac.ms+' ms':'')+'<br>'+ 
                 'Chromium: '+(r.chromium&&r.chromium.ok?'✓':'✕')+'<br>'+ 
                 'Lampac providers: '+(p.ok===false?'✕':((p.working||'?')+'/'+(p.total||'?')))+'<br>'+ 
                 'TorrServer LG: '+(tv.torrserver?'✓':'?')+'<br>'+ 
                 'Uptime: '+Math.floor((x.uptime||0)/3600)+' год<br>'+ 
                 'Restarts: Lampac '+((x.restarts||{}).lampac||0)+', Gateway '+((x.restarts||{}).gateway||0)+', bridge '+((x.restarts||{}).bridge||0);
-            showHtmlModal('Здоров’я K2',h);
+            showHtmlModal('Y7 Health',h);
         },function(){notify('✕ K2 System Health недоступний');});
     }
 
@@ -734,10 +740,90 @@
         var t=clientToken(); if(!t)return notify('Спочатку підключи K2 Lampac.');
         ajax('POST',k2Api('/k2/admin/start'),{token:t},function(r){
             if(!r.url)return notify('Не отримано URL керування');
-            var box=$('<div style="padding:1em;text-align:center"><div class="k2-admin-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div>Скануй QR телефоном → введи Admin PIN.</div><div style="opacity:.65;font-size:.8em;margin-top:1em">'+r.url+'</div></div>');
-            Lampa.Modal.open({title:'K2 — керування з телефона',html:box,size:'medium',onBack:function(){Lampa.Modal.close();}});
+            REMOTE_ADMIN_UNTIL = Date.now() + 31*60*1000;
+            var box=$('<div style="padding:1em;text-align:center"><div class="k2-admin-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div>Скануй QR телефоном і введи Admin PIN.</div><div style="opacity:.65;font-size:.8em;margin-top:1em;overflow-wrap:anywhere">'+r.url+'</div></div>');
+            Lampa.Modal.open({title:'Y7 Admin',html:box,size:'medium',onBack:function(){Lampa.Modal.close();}});
             loadQrLib(function(ok){if(ok){try{new QRCode(box.find('.k2-admin-qr')[0],{text:r.url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});}catch(e){}}});
         },function(){notify('✕ Не вдалося відкрити K2 Admin');});
+    }
+
+
+    function startGuestRemote() {
+        var t=clientToken(); if(!t)return notify('Спочатку підключи Y7 Core.');
+        ajax('POST',k2Api('/k2/remote/start'),{token:t},function(r){
+            if(!r.url)return notify('Не отримано URL Y7 TV Manager');
+            REMOTE_GUEST_UNTIL=Date.now()+((r.expires_in||43200)*1000);
+            ensureGuestRemotePoll();
+            var hours=Math.max(1,Math.ceil((r.expires_in||43200)/3600));
+            var box=$('<div style="padding:1em;text-align:center"><div class="y7-remote-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div style="font-size:1.05em;font-weight:700">Y7 TV Manager · '+hours+' год</div><div style="margin-top:.55em">Сканує будь-хто — PIN не потрібен. Повне налаштування Y7 Media тільки цього TV.</div><div style="opacity:.65;font-size:.8em;margin-top:1em;overflow-wrap:anywhere">'+r.url+'</div></div>');
+            Lampa.Modal.open({title:'Y7 TV Manager',html:box,size:'medium',onBack:function(){Lampa.Modal.close();}});
+            loadQrLib(function(ok){if(ok){try{new QRCode(box.find('.y7-remote-qr')[0],{text:r.url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});}catch(e){}}});
+        },function(){notify('Не вдалося створити Y7 TV Manager QR');});
+    }
+
+    function stopGuestRemote() {
+        var t=clientToken(); if(!t)return;
+        ajax('POST',k2Api('/k2/remote/revoke'),{token:t},function(){REMOTE_GUEST_UNTIL=0;notify('Y7 TV Manager для цього TV закрито');},function(){notify('Не вдалося закрити Y7 TV Manager');});
+    }
+
+    function remoteControllerAction(name) {
+        try {
+            if(name==='y7'){openK2FullManager();return true;}
+            if(name==='menu'){if(Lampa.Controller&&Lampa.Controller.toggle){Lampa.Controller.toggle('menu');return true;}}
+            if(name==='home'){
+                try{Lampa.Activity.push({url:'',title:'',component:'main',page:1});return true;}catch(eh){}
+            }
+            var c=Lampa.Controller&&Lampa.Controller.enabled?Lampa.Controller.enabled():null;
+            if(c&&typeof c[name]==='function'){c[name]();return true;}
+            if(name==='back'&&Lampa.Activity&&Lampa.Activity.backward){Lampa.Activity.backward();return true;}
+        } catch(e) {}
+        return false;
+    }
+
+    function remoteTextInput(text) {
+        text=String(text||'').slice(0,300);
+        try {
+            var el=document.activeElement;
+            if(el&&(/^(INPUT|TEXTAREA)$/i).test(el.tagName)){
+                el.value=text;
+                try{el.dispatchEvent(new Event('input',{bubbles:true}));}catch(e1){}
+                try{el.dispatchEvent(new Event('change',{bubbles:true}));}catch(e2){}
+                return true;
+            }
+        } catch(e) {}
+        notify('Відкрий поле вводу на TV і повтори');
+        return false;
+    }
+
+    function executeGuestCommand(c){
+        if(!c||!c.type)return;
+        if(c.type==='remote_key')remoteControllerAction(String(c.key||''));
+        else if(c.type==='remote_text')remoteTextInput(c.text||'');
+        else executeCommand(c);
+    }
+
+    function ensureGuestRemotePoll(){
+        if(REMOTE_GUEST_POLLING||Date.now()>REMOTE_GUEST_UNTIL)return;
+        var t=clientToken();if(!t)return;
+        REMOTE_GUEST_POLLING=true;
+        try{
+            var x=new XMLHttpRequest();
+            x.open('POST',k2Api('/k2/remote/poll'),true);
+            x.timeout=26000;
+            x.setRequestHeader('Content-Type','application/json');
+            x.onload=function(){
+                REMOTE_GUEST_POLLING=false;
+                var r={};try{r=JSON.parse(x.responseText||'{}');}catch(e){}
+                if(x.status>=200&&x.status<300&&r.ok){
+                    var cs=r.commands||[];for(var i=0;i<cs.length;i++)executeGuestCommand(cs[i]);
+                    if(r.active){REMOTE_GUEST_UNTIL=Date.now()+Math.max(1000,(r.expires_in||30)*1000);setTimeout(ensureGuestRemotePoll,25);}
+                    else REMOTE_GUEST_UNTIL=0;
+                } else if(Date.now()<REMOTE_GUEST_UNTIL) setTimeout(ensureGuestRemotePoll,1200);
+            };
+            x.onerror=function(){REMOTE_GUEST_POLLING=false;if(Date.now()<REMOTE_GUEST_UNTIL)setTimeout(ensureGuestRemotePoll,1600);};
+            x.ontimeout=function(){REMOTE_GUEST_POLLING=false;if(Date.now()<REMOTE_GUEST_UNTIL)setTimeout(ensureGuestRemotePoll,30);};
+            x.send(JSON.stringify({token:t,wait:20}));
+        }catch(e){REMOTE_GUEST_POLLING=false;if(Date.now()<REMOTE_GUEST_UNTIL)setTimeout(ensureGuestRemotePoll,1600);}
     }
 
     function backupSnapshot() {
@@ -751,7 +837,7 @@
             glass:getStorage('glass_style',false),black:getStorage('black_style',false),animation:getStorage('animation',true),background:getStorage('background',true)
         }};
     }
-    function saveBackup(quiet){var t=clientToken();if(!t)return;if(!quiet)notify('Створюю backup…');ajax('POST',k2Api('/k2/backup/save'),{token:t,snapshot:backupSnapshot()},function(){if(!quiet)notify('✓ Backup K2 створено');},function(){if(!quiet)notify('✕ Backup не створено');});}
+    function saveBackup(quiet){var t=clientToken();if(!t)return;if(!quiet)notify('Створюю backup…');ajax('POST',k2Api('/k2/backup/save'),{token:t,snapshot:backupSnapshot()},function(){if(!quiet)notify('✓ Backup Y7 створено');},function(){if(!quiet)notify('✕ Backup не створено');});}
     function restoreBackup(){var t=clientToken();if(!t)return;ajax('GET',k2Api('/k2/backup/latest?token='+encodeURIComponent(t)),null,function(r){var b=r.snapshot||{},tog=b.toggles||{},st=b.settings||{};PLUGINS.forEach(function(p){if(typeof tog[p.id]!=='undefined')setEnabled(p,!!tog[p.id]);});if(b.extras)saveExtraPlugins(b.extras);if(st.start_page)setStartPage(st.start_page,true);if(st.iptv)applyIptvPreset(st.iptv,true);if(typeof st.kids!=='undefined')setStorage(KIDS_MODE_KEY,!!st.kids);enforceKidsRestrictions();if(typeof st.sync!=='undefined')setStorage(SYNC_ON_KEY,!!st.sync);if(st.quality_min!==undefined)setStorage(QUALITY_MIN_KEY,st.quality_min);if(st.quality_ua!==undefined)setStorage(QUALITY_UA_KEY,!!st.quality_ua);if(st.quality_cam!==undefined)setStorage(QUALITY_CAM_KEY,!!st.quality_cam);if(st.quality_working!==undefined)setStorage(QUALITY_WORKING_KEY,!!st.quality_working);reconcile(true);sendPolicy(true);notify('✓ Backup відновлено. Перезапусти Lampa.');},function(){notify('✕ Немає backup або сервер недоступний');});}
 
     function sha256Hex(text, done, fail){
@@ -778,7 +864,7 @@
         var current=bool(getStorage(KIDS_MODE_KEY,false));
         if(!on && current && !fromAdmin){setStorage(KIDS_MODE_KEY,true);notify('🔒 Вимкнення дитячого режиму — тільки через K2 Admin + PIN.');startRemoteAdmin();return;}
         setStorage(KIDS_MODE_KEY,!!on);
-        if(on){enforceKidsRestrictions();applyIptvPreset('kids_ua',true);syncSecureLampac(false);reconcile(false);notify('🧒 Дитячий режим увімкнено');}
+        if(on){enforceKidsRestrictions();applyIptvPreset('kids_ua',true);syncSecureLampac(false);reconcile(false);notify('Дитячий режим увімкнено');}
         else{notify('✓ Дитячий режим вимкнено через Admin PIN');}
         sendPolicy(true);
         if(currentSettingsBody)decorate(currentSettingsBody);
@@ -788,14 +874,74 @@
         if(!c||!c.type)return;
         if(c.type==='kids')applyKidsMode(!!c.on,true);
         else if(c.type==='iptv')applyIptvPreset(c.preset||'ua',false);
-        else if(c.type==='policy'){var p=c.policy||{};if(p.min_quality!==undefined)setStorage(QUALITY_MIN_KEY,p.min_quality);if(p.ua_first!==undefined)setStorage(QUALITY_UA_KEY,!!p.ua_first);if(p.hide_cam!==undefined)setStorage(QUALITY_CAM_KEY,!!p.hide_cam);if(p.only_working!==undefined)setStorage(QUALITY_WORKING_KEY,!!p.only_working);}
+        else if(c.type==='policy'){
+            var p=c.policy||{};
+            if(p.min_quality!==undefined)setStorage(QUALITY_MIN_KEY,p.min_quality);
+            if(p.ua_first!==undefined)setStorage(QUALITY_UA_KEY,!!p.ua_first);
+            if(p.hide_cam!==undefined)setStorage(QUALITY_CAM_KEY,!!p.hide_cam);
+            if(p.only_working!==undefined)setStorage(QUALITY_WORKING_KEY,!!p.only_working);
+            sendPolicy(true);
+        }
         else if(c.type==='plugin'){var p=pluginById(c.id);if(p)toggle(p,!!c.on);}
+        else if(c.type==='lampac'){
+            if(c.online!==undefined)setStorage(LAMPAC_ON_KEY,!!c.online);
+            if(c.sisi!==undefined)setStorage(SISI_ON_KEY,!!c.sisi);
+            if(bool(getStorage(KIDS_MODE_KEY,false)))setStorage(SISI_ON_KEY,false);
+            syncSecureLampac(true);needRestart(true);
+        }
+        else if(c.type==='start_page')setStartPage(c.value||'favorite@history',false);
+        else if(c.type==='sync'){setStorage(SYNC_ON_KEY,!!c.on);syncSecureLampac(true);needRestart(true);}
+        else if(c.type==='health_auto')setStorage(HEALTH_AUTO_KEY,!!c.on);
+        else if(c.type==='style'){
+            if(c.preset==='glass')applyGlassPreset(false);
+            else if(c.preset==='oled')applyOledPreset();
+            else applyStandardLook();
+        }
+        else if(c.type==='torr_url')setTorrServer(c.url||'http://127.0.0.1:8090');
+        else if(c.type==='check_plugins')checkAllPlugins(true);
+        else if(c.type==='check_torr')checkTorrServer();
+        else if(c.type==='provider_check')checkProviderHealth();
         else if(c.type==='backup')saveBackup(true);
         else if(c.type==='restore')restoreBackup();
         else if(c.type==='update'){setStorage(UPDATE_CHANNEL_KEY,c.channel||'stable');checkClientUpdate(true,c.channel||'stable');}
+        else if(c.type==='update_channel')setStorage(UPDATE_CHANNEL_KEY,c.channel||'stable');
         else if(c.type==='extra_add'){if(addExtraPlugin(c.plugin||{}))notify('✓ Новий плагін додано з карантину');}
+        else if(c.type==='remote_key')remoteControllerAction(String(c.key||''));
+        else if(c.type==='remote_text')remoteTextInput(c.text||'');
+        setTimeout(heartbeat,250);
     }
-    function heartbeat(){var t=clientToken();if(!t)return;var ph=healthCache(),summary=ph&&ph.summary?ph.summary:{};var plist=[];PLUGINS.forEach(function(p){plist.push({id:p.id,name:p.name,on:enabled(p)});});ajax('POST',k2Api('/k2/heartbeat'),{token:t,version:VERSION,torrserver:bool(getStorage(TORR_LAST_KEY,false)),plugin_summary:summary,iptv_preset:getStorage(IPTV_PRESET_KEY,'ua'),kids_mode:bool(getStorage(KIDS_MODE_KEY,false)),update_channel:getStorage(UPDATE_CHANNEL_KEY,'stable'),plugins:plist},function(r){var cs=r.commands||[];for(var i=0;i<cs.length;i++)executeCommand(cs[i]);},function(){});}
+    function heartbeat(){
+        var t=clientToken();if(!t)return;
+        var ph=healthCache(),summary=ph&&ph.summary?ph.summary:{},hm=healthMap(),plist=[];
+        PLUGINS.forEach(function(p){var h=hm[p.id]||{};plist.push({id:p.id,name:p.name,cat:p.cat,on:enabled(p),health:h.state||'',http:h.http||0});});
+        var settings={
+            start_page:getStorage(START_PAGE_KEY,'favorite@history'),sync:bool(getStorage(SYNC_ON_KEY,true)),
+            health_auto:bool(getStorage(HEALTH_AUTO_KEY,true)),torr_url:getStorage('k2pm_ts_url','http://127.0.0.1:8090'),
+            lampac_online:bool(getStorage(LAMPAC_ON_KEY,true)),sisi:bool(getStorage(SISI_ON_KEY,false)),
+            glass:bool(getStorage('glass_style',false)),black:bool(getStorage('black_style',false)),
+            animation:bool(getStorage('animation',true)),background:bool(getStorage('background',true))
+        };
+        ajax('POST',k2Api('/k2/heartbeat'),{
+            token:t,version:VERSION,torrserver:bool(getStorage(TORR_LAST_KEY,false)),plugin_summary:summary,
+            iptv_preset:getStorage(IPTV_PRESET_KEY,'ua'),kids_mode:bool(getStorage(KIDS_MODE_KEY,false)),
+            update_channel:getStorage(UPDATE_CHANNEL_KEY,'stable'),plugins:plist,settings:settings
+        },function(r){
+            var cs=r.commands||[];for(var i=0;i<cs.length;i++)executeCommand(cs[i]);
+            if(r.remote_active){REMOTE_GUEST_UNTIL=Date.now()+Math.max(1000,(r.remote_expires_in||30)*1000);ensureGuestRemotePoll();}
+        },function(){});
+    }
+
+    function pollAdminCommands(){
+        if(Date.now()>REMOTE_ADMIN_UNTIL)return;
+        var t=clientToken();if(!t)return;
+        ajax('POST',k2Api('/k2/commands'),{token:t},function(r){
+            var cs=r.commands||[];
+            if(!cs.length)return;
+            for(var i=0;i<cs.length;i++)executeCommand(cs[i]);
+            // Send the changed state back immediately instead of waiting for the 30 s heartbeat.
+            setTimeout(heartbeat,250);
+        },function(){});
+    }
 
     function healthCache() {
         try {
@@ -1022,9 +1168,202 @@
         try { Lampa.SettingsApi.addParam(o); } catch(e){ log('param error',e); }
     }
 
+
+    function k2Svg(name) {
+        var p='';
+        if(name==='server')p='<path d="M5 5h14v5H5zM5 14h14v5H5z"/><circle cx="8" cy="7.5" r="1" fill="currentColor"/><circle cx="8" cy="16.5" r="1" fill="currentColor"/>';
+        else if(name==='health')p='<path d="M3 12h4l2-5 4 10 2-5h6" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='tv')p='<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='kids')p='<circle cx="12" cy="8" r="4"/><path d="M5 21c.8-5 3-7 7-7s6.2 2 7 7" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='quality')p='<path d="M4 17l4-4 3 3 6-7 3 3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 20h16" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='backup')p='<path d="M5 3h11l3 3v15H5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v6h8V3M8 21v-7h8v7" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='home')p='<path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='film')p='<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 5v14M16 5v14M3 9h5M16 9h5M3 15h5M16 15h5" fill="none" stroke="currentColor" stroke-width="1.5"/>';
+        else if(name==='torrent')p='<path d="M12 3v12M7 10l5 5 5-5M5 21h14" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='lock')p='<rect x="5" y="10" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 018 0v3" fill="none" stroke="currentColor" stroke-width="2"/>';
+        else if(name==='collection')p='<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>';
+        else if(name==='design')p='<path d="M12 3a9 9 0 100 18c2 0 2-3 4-3h2a3 3 0 000-6h-1" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="9" r="1"/><circle cx="11" cy="6" r="1"/><circle cx="7" cy="13" r="1"/>';
+        else p='<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2"/>';
+        return '<svg class="k2f-icon" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';
+    }
+
+    function openK2FullManager() {
+        if(FULL_OPENING)return;
+        FULL_OPENING=true;
+        try{
+            Lampa.Activity.push({url:'',title:'Y7 Media',component:FULL_COMPONENT,page:1});
+        }catch(e){
+            FULL_OPENING=false;
+            notify('Не вдалося відкрити Y7 Media');
+        }
+        setTimeout(function(){FULL_OPENING=false;},700);
+    }
+
+    function registerFullManager() {
+        try{
+            Lampa.Component.add(FULL_COMPONENT,function(object){
+                var self=this;
+                var scroll=new Lampa.Scroll({mask:true,over:true});
+                var root=$('<div class="k2f-root"></div>');
+                var body=$('<div class="k2f-body"></div>');
+                var last=false;
+
+                function statusText(r){
+                    if(!r)return 'не перевірено';
+                    if(r.state==='ok')return 'доступний'+(r.ms?' · '+r.ms+' ms':'');
+                    if(r.state==='warn')return 'відповідає'+(r.http?' · HTTP '+r.http:'');
+                    if(r.state==='blocked')return 'перевірку обмежено';
+                    return 'недоступний'+(r.http?' · HTTP '+r.http:'');
+                }
+                function section(title,icon){
+                    body.append('<div class="k2f-section">'+k2Svg(icon)+'<span>'+title+'</span></div>');
+                }
+                function row(title,desc,value,action,cls){
+                    var r=$('<div class="k2f-row selector '+(cls||'')+'"><div class="k2f-row-main"><div class="k2f-row-title"></div><div class="k2f-row-desc"></div></div><div class="k2f-value"></div></div>');
+                    r.find('.k2f-row-title').text(title);
+                    r.find('.k2f-row-desc').text(desc||'');
+                    r.find('.k2f-value').text(value||'');
+                    r.on('hover:focus',function(){last=r[0];try{scroll.update(r,true);}catch(e){}});
+                    r.on('hover:enter',function(){if(action)action(r);});
+                    body.append(r);return r;
+                }
+                function toggleRow(title,desc,getter,setter){
+                    var r=row(title,desc,getter()?'ON':'OFF',function(x){var nv=!getter();setter(nv);x.find('.k2f-value').text(nv?'ON':'OFF');x.toggleClass('k2f-on',nv);});
+                    r.toggleClass('k2f-on',getter());return r;
+                }
+                function selectRow(title,desc,values,current,setter){
+                    return row(title,desc,values[current]||String(current),function(x){
+                        var items=[];Object.keys(values).forEach(function(k){items.push({title:values[k],value:k,selected:String(k)===String(current)});});
+                        Lampa.Select.show({title:title,items:items,onBack:function(){Lampa.Controller.toggle('k2full');},onSelect:function(a){current=a.value;setter(a.value);x.find('.k2f-value').text(values[a.value]||a.value);Lampa.Select.close();Lampa.Controller.toggle('k2full');}});
+                    });
+                }
+                function pluginRow(p){
+                    var hm=healthMap(), hr=hm[p.id];
+                    var val=(enabled(p)?'ON':'OFF')+' · '+statusText(hr);
+                    var r=row(p.name,p.desc,val,function(x){var nv=!enabled(p);toggle(p,nv);x.find('.k2f-value').text((nv?'ON':'OFF')+' · '+statusText(healthMap()[p.id]));x.toggleClass('k2f-on',nv);});
+                    r.toggleClass('k2f-on',enabled(p));return r;
+                }
+                function dynToggle(title,desc,key,def,onChange,healthId){
+                    function get(){return bool(getStorage(key,def));}
+                    var hr=healthId?healthMap()[healthId]:null;
+                    var r=row(title,desc,(get()?'ON':'OFF')+(healthId?' · '+statusText(hr):''),function(x){var nv=!get();setStorage(key,nv);onChange(nv);x.find('.k2f-value').text((nv?'ON':'OFF')+(healthId?' · '+statusText(healthMap()[healthId]):''));x.toggleClass('k2f-on',nv);});
+                    r.toggleClass('k2f-on',get());return r;
+                }
+
+                function build(){
+                    body.empty();
+                    var paired=!!clientToken();
+                    var kids=bool(getStorage(KIDS_MODE_KEY,false));
+                    var health=healthCache()||{}, hs=health.summary||{};
+                    var healthy=(hs.ok||0)+(hs.warn||0);
+                    var total=healthy+(hs.dead||0)+(hs.blocked||0);
+
+                    body.append(
+                        '<div class="k2f-head">'+
+                        '<div class="k2f-logo">Y7</div>'+
+                        '<div class="k2f-headtext"><div class="k2f-title">Y7 Media</div>'+
+                        '<div class="k2f-sub">v'+VERSION+' · Core '+(paired?'online':'offline')+
+                        ' · '+countEnabled()+' активних'+(kids?' · Y7 Kids ON':'')+'</div></div>'+
+                        '<div class="k2f-summary">Sources <b>'+healthy+'/'+total+'</b></div>'+
+                        '</div>'
+                    );
+
+                    section('Швидкий доступ','home');
+                    row(
+                        paired?'Y7 Core підключено':'Підключити Y7 Core',
+                        paired?'Захищене з’єднання з Media Server активне.':'QR + Y7 Admin PIN. Довгий token вручну не вводиться.',
+                        paired?'ONLINE':'PAIR',
+                        function(){if(paired)checkSecureLampac();else startPairing();},
+                        paired?'k2f-on':''
+                    );
+                    row('Y7 Admin','Керування TV з телефона: плагіни, IPTV, Kids, backup та update.','OPEN',startRemoteAdmin);
+                    row('Y7 TV Manager','QR без PIN: повне налаштування Y7 Media тільки цього TV. Новий QR відкликає попередній.','QR',startGuestRemote);
+                    row('Закрити Y7 TV Manager','Одразу закрити доступ Y7 TV Manager до цього TV.','REVOKE',stopGuestRemote);
+                    row('Y7 Health','Core, Chromium, джерела, TorrServer, IPTV та autorecovery.','CHECK',checkSystemHealth);
+                    row('TorrServer','Локальний TorrServer цього LG: '+String(getStorage('k2pm_ts_url','http://127.0.0.1:8090')),'CHECK',checkTorrServer);
+
+                    section('Перегляд і якість','quality');
+                    dynToggle('Lampac Online','Основні онлайн-джерела через Y7 Core.',LAMPAC_ON_KEY,true,function(){syncSecureLampac(true);needRestart(true);},'__lampac_online');
+                    row('Перевірити балансери','Робочі джерела та визначена якість 4K / 1080p / 720p.','CHECK',checkProviderHealth);
+                    selectRow('Мінімальна відома якість','Невідому якість Y7 не відкидає.',{0:'Будь-яка',720:'720p+',1080:'1080p+',2160:'4K, якщо визначено'},String(getStorage(QUALITY_MIN_KEY,720)),function(v){setStorage(QUALITY_MIN_KEY,parseInt(v,10)||0);sendPolicy(false);});
+                    toggleRow('Українська — вище','UA-позначені варіанти отримують додатковий пріоритет.',function(){return bool(getStorage(QUALITY_UA_KEY,true));},function(v){setStorage(QUALITY_UA_KEY,v);sendPolicy(false);});
+                    toggleRow('Ховати CAM / TS','Прибирає очевидно низькоякісні джерела.',function(){return bool(getStorage(QUALITY_CAM_KEY,true));},function(v){setStorage(QUALITY_CAM_KEY,v);sendPolicy(false);});
+                    toggleRow('Тільки робочі','Після health-check мертві балансери не показуються.',function(){return bool(getStorage(QUALITY_WORKING_KEY,true));},function(v){setStorage(QUALITY_WORKING_KEY,v);sendPolicy(false);});
+
+                    section('IPTV, футбол і діти','tv');
+                    var iv={};Object.keys(IPTV_PRESETS).forEach(function(k){iv[k]=IPTV_PRESETS[k].title;});
+                    selectRow('IPTV пресет','Україна, футбол, спорт, Kids, Animation та інші списки.',iv,String(getStorage(IPTV_PRESET_KEY,'ua')),function(v){applyIptvPreset(v,false);});
+                    row('Футбол','Швидко ввімкнути football-пресет.','APPLY',function(){applyIptvPreset('football',false);});
+                    toggleRow('Y7 Kids','Kids UA + блокування 18+. Вимкнення захищене Y7 Admin PIN.',function(){return bool(getStorage(KIDS_MODE_KEY,false));},function(v){applyKidsMode(v,false);});
+                    PLUGINS.forEach(function(p){if(p.cat==='kids')pluginRow(p);});
+
+                    section('Онлайн-джерела','film');
+                    PLUGINS.forEach(function(p){if(p.cat==='online')pluginRow(p);});
+
+                    section('Торренти','torrent');
+                    PLUGINS.forEach(function(p){if(p.cat==='torrent')pluginRow(p);});
+
+                    section('Колекції та каталоги','collection');
+                    PLUGINS.forEach(function(p){if(p.cat==='collections')pluginRow(p);});
+
+                    section('TV і спорт','tv');
+                    PLUGINS.forEach(function(p){if(p.cat==='tv')pluginRow(p);});
+
+                    section('Вигляд','design');
+                    row('Y7 Glass','Штатний glass-стиль Lampa без перебудови картки фільму.','APPLY',function(){applyGlassPreset(false);});
+                    row('Y7 OLED Black','Темний варіант для OLED / темної кімнати.','APPLY',applyOledPreset);
+                    row('Стандартна Lampa','Повернути штатний вигляд без Y7 preset.','APPLY',applyStandardLook);
+                    PLUGINS.forEach(function(p){if(p.cat==='design')pluginRow(p);});
+
+                    section('Система і обслуговування','backup');
+                    selectRow('Стартова сторінка','Звичайна штатна стартова сторінка Lampa.',{'favorite@history':'Історія переглядів','main':'Головна','favorite@bookmarks':'Закладки','mytorrents':'Мої торренти','last':'Останній екран'},String(getStorage(START_PAGE_KEY,'favorite@history')),function(v){setStartPage(v,false);});
+                    toggleRow('Y7 Sync','Спільні закладки та позиція перегляду між прив’язаними TV.',function(){return bool(getStorage(SYNC_ON_KEY,true));},function(v){setStorage(SYNC_ON_KEY,v);syncSecureLampac(true);needRestart(true);});
+                    row('Перевірити всі плагіни','Оновити статус кожного джерела.','CHECK',function(){checkAllPlugins(true);});
+                    toggleRow('Автоперевірка плагінів','Health-кеш приблизно раз на 6 годин.',function(){return bool(getStorage(HEALTH_AUTO_KEY,true));},function(v){setStorage(HEALTH_AUTO_KEY,v);});
+                    row('Створити backup','Налаштування, плагіни, IPTV, Kids і вигляд — без секретів.','RUN',function(){saveBackup(false);});
+                    row('Відновити backup','Відновити останній backup Y7.','RUN',restoreBackup);
+                    selectRow('Канал оновлень','Stable або Beta.',{stable:'Stable',beta:'Beta'},String(getStorage(UPDATE_CHANNEL_KEY,'stable')),function(v){setStorage(UPDATE_CHANNEL_KEY,v);});
+                    row('Перевірити оновлення','Застосування тільки після SHA-256 перевірки.','CHECK',function(){checkClientUpdate(true);});
+                    row('Пошук нових плагінів','Нові URL потрапляють тільки в карантин.','SCAN',discoverPlugins);
+
+                    section('Корисне','health');
+                    PLUGINS.forEach(function(p){if(p.cat==='utils')pluginRow(p);});
+
+                    if(!kids){
+                        section('18+','lock');
+                        dynToggle('SISI','18+ джерела через Y7 Core.',SISI_ON_KEY,false,function(){syncSecureLampac(true);needRestart(true);},'__lampac_sisi');
+                        PLUGINS.forEach(function(p){if(p.cat==='adult')pluginRow(p);});
+                    }
+                }
+
+                this.create=function(){
+                    style();
+                    build();
+                    scroll.append(body);root.append(scroll.render());
+                    try{this.activity.loader(false);}catch(e){}
+                    return this.render();
+                };
+                this.render=function(){return root;};
+                this.start=function(){
+                    if(Lampa.Activity.active().activity!==this.activity)return;
+                    Lampa.Controller.add('k2full',{
+                        toggle:function(){Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(last||root.find('.selector')[0],root);},
+                        up:function(){Navigator.move('up');},down:function(){Navigator.move('down');},
+                        left:function(){if(Navigator.canmove('left'))Navigator.move('left');else Lampa.Controller.toggle('menu');},
+                        right:function(){Navigator.move('right');},back:self.back.bind(self)
+                    });
+                    Lampa.Controller.toggle('k2full');
+                };
+                this.back=function(){Lampa.Activity.backward();};
+                this.pause=function(){};this.stop=function(){};
+                this.destroy=function(){try{scroll.destroy();}catch(e){}root.remove();body.remove();};
+            });
+        }catch(e){log('full manager register error',e);}
+    }
+
     function setupSettings() {
         try {
-            Lampa.SettingsApi.addComponent({component:COMPONENT,name:'K2 Plugin Manager',icon:ICON});
+            Lampa.SettingsApi.addComponent({component:COMPONENT,name:'Y7 Media',icon:ICON});
         } catch(e){}
 
         addParam({
@@ -1072,7 +1411,7 @@
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_check_plugins',type:'trigger',default:false},
-            field:{name:'🔎 Перевірити всі плагіни',description:'Перевірка кожного джерела через K2 сервер. Статус з’явиться прямо під кожним плагіном.'},
+            field:{name:'Перевірити всі плагіни',description:'Перевірка кожного джерела через K2 сервер. Статус з’явиться прямо під кожним плагіном.'},
             onChange:function(){
                 try{Lampa.Storage.set('k2pm_check_plugins',false);}catch(e){}
                 checkAllPlugins(true);
@@ -1085,24 +1424,24 @@
             field:{name:'Автоперевірка плагінів',description:'Оновлювати статуси автоматично приблизно раз на 6 годин.'}
         });
 
-        addParam({component:COMPONENT,param:{name:'k2pm_system_health',type:'trigger',default:false},field:{name:'🩺 Здоров’я всієї K2 системи',description:'Lampac, Chromium, балансери, TorrServer TV, uptime та autorecovery.'},onChange:function(){setStorage('k2pm_system_health',false);checkSystemHealth();}});
-        addParam({component:COMPONENT,param:{name:'k2pm_provider_health',type:'trigger',default:false},field:{name:'🎞 Перевірити балансери Lampac',description:'Реальний пошук тестового фільму: робота джерела + визначена якість 4K/1080/720.'},onChange:function(){setStorage('k2pm_provider_health',false);checkProviderHealth();}});
-        addParam({component:COMPONENT,param:{name:'k2pm_remote_admin',type:'trigger',default:false},field:{name:'📱 K2 Admin на телефоні',description:'QR → Admin PIN → здоров’я, Kids, IPTV, якість, плагіни, backup та updates.'},onChange:function(){setStorage('k2pm_remote_admin',false);startRemoteAdmin();}});
+        addParam({component:COMPONENT,param:{name:'k2pm_system_health',type:'trigger',default:false},field:{name:'Y7 Health',description:'Lampac, Chromium, балансери, TorrServer TV, uptime та autorecovery.'},onChange:function(){setStorage('k2pm_system_health',false);checkSystemHealth();}});
+        addParam({component:COMPONENT,param:{name:'k2pm_provider_health',type:'trigger',default:false},field:{name:'Перевірити балансери Lampac',description:'Реальний пошук тестового фільму: робота джерела + визначена якість 4K/1080/720.'},onChange:function(){setStorage('k2pm_provider_health',false);checkProviderHealth();}});
+        addParam({component:COMPONENT,param:{name:'k2pm_remote_admin',type:'trigger',default:false},field:{name:'Y7 Admin на телефоні',description:'QR → Admin PIN → здоров’я, Kids, IPTV, якість, плагіни, backup та updates.'},onChange:function(){setStorage('k2pm_remote_admin',false);startRemoteAdmin();}});
 
-        addParam({component:COMPONENT,param:{name:KIDS_MODE_KEY,type:'trigger',default:false},field:{name:'🧒 Дитячий режим',description:'Приховує/вимикає 18+ та ставить український дитячий IPTV. Вимкнення — тільки через телефон + Admin PIN.'},onChange:function(v){applyKidsMode(bool(v),false);}});
+        addParam({component:COMPONENT,param:{name:KIDS_MODE_KEY,type:'trigger',default:false},field:{name:'Дитячий режим',description:'Приховує/вимикає 18+ та ставить український дитячий IPTV. Вимкнення — тільки через телефон + Admin PIN.'},onChange:function(v){applyKidsMode(bool(v),false);}});
 
-        addParam({component:COMPONENT,param:{name:SYNC_ON_KEY,type:'trigger',default:true},field:{name:'☁ Синхронізація K2',description:'Спільні закладки/історія/позиція перегляду між усіма прив’язаними TV без профілів.'},onChange:function(){syncSecureLampac(true);needRestart(true);}});
+        addParam({component:COMPONENT,param:{name:SYNC_ON_KEY,type:'trigger',default:true},field:{name:'Y7 Sync',description:'Спільні закладки/історія/позиція перегляду між усіма прив’язаними TV без профілів.'},onChange:function(){syncSecureLampac(true);needRestart(true);}});
 
         addParam({component:COMPONENT,param:{name:QUALITY_MIN_KEY,type:'select',values:{0:'Будь-яка',720:'720p+',1080:'1080p+',2160:'4K, якщо визначено'},default:720},field:{name:'Мінімальна відома якість Lampac',description:'Невідому якість не відкидає; відомі низькі якості опускає/ховає.'},onChange:function(){sendPolicy(false);}});
-        addParam({component:COMPONENT,param:{name:QUALITY_UA_KEY,type:'trigger',default:true},field:{name:'🇺🇦 Українська — вище',description:'Українські/UA позначені джерела отримують додатковий пріоритет.'},onChange:function(){sendPolicy(false);}});
+        addParam({component:COMPONENT,param:{name:QUALITY_UA_KEY,type:'trigger',default:true},field:{name:'Українська — вище',description:'Українські/UA позначені джерела отримують додатковий пріоритет.'},onChange:function(){sendPolicy(false);}});
         addParam({component:COMPONENT,param:{name:QUALITY_CAM_KEY,type:'trigger',default:true},field:{name:'Ховати CAM / TS',description:'Не показувати очевидно низькоякісні CAM/TS/TC варіанти.'},onChange:function(){sendPolicy(false);}});
         addParam({component:COMPONENT,param:{name:QUALITY_WORKING_KEY,type:'trigger',default:true},field:{name:'Після перевірки — тільки робочі',description:'Коли Lampac завершив life-check, мертві балансери прибираються зі списку.'},onChange:function(){sendPolicy(false);}});
 
-        addParam({component:COMPONENT,param:{name:'k2pm_backup_now',type:'trigger',default:false},field:{name:'💾 Створити backup K2',description:'Зберігає без секретів налаштування, плагіни, IPTV, Kids та дизайн на сервері.'},onChange:function(){setStorage('k2pm_backup_now',false);saveBackup(false);}});
-        addParam({component:COMPONENT,param:{name:'k2pm_restore_backup',type:'trigger',default:false},field:{name:'♻ Відновити останній backup',description:'Відновити K2 налаштування. Pairing/token не переноситься.'},onChange:function(){setStorage('k2pm_restore_backup',false);restoreBackup();}});
+        addParam({component:COMPONENT,param:{name:'k2pm_backup_now',type:'trigger',default:false},field:{name:'Створити backup K2',description:'Зберігає без секретів налаштування, плагіни, IPTV, Kids та дизайн на сервері.'},onChange:function(){setStorage('k2pm_backup_now',false);saveBackup(false);}});
+        addParam({component:COMPONENT,param:{name:'k2pm_restore_backup',type:'trigger',default:false},field:{name:'Відновити останній backup',description:'Відновити K2 налаштування. Pairing/token не переноситься.'},onChange:function(){setStorage('k2pm_restore_backup',false);restoreBackup();}});
         addParam({component:COMPONENT,param:{name:UPDATE_CHANNEL_KEY,type:'select',values:{stable:'Stable',beta:'Beta'},default:'stable'},field:{name:'Канал оновлень K2',description:'Оновлення завантажується з твого K2 сервера й застосовується тільки після SHA-256 перевірки.'}});
-        addParam({component:COMPONENT,param:{name:'k2pm_update_check',type:'trigger',default:false},field:{name:'⬆ Перевірити оновлення K2',description:'Без зміни GitHub URL: перевірене оновлення активується після рестарту Lampa.'},onChange:function(){setStorage('k2pm_update_check',false);checkClientUpdate(true);}});
-        addParam({component:COMPONENT,param:{name:'k2pm_discover',type:'trigger',default:false},field:{name:'🧪 Знайти нові плагіни',description:'Нові URL лише потрапляють у карантин; автоматично нічого не встановлюється.'},onChange:function(){setStorage('k2pm_discover',false);discoverPlugins();}});
+        addParam({component:COMPONENT,param:{name:'k2pm_update_check',type:'trigger',default:false},field:{name:'Перевірити оновлення K2',description:'Без зміни GitHub URL: перевірене оновлення активується після рестарту Lampa.'},onChange:function(){setStorage('k2pm_update_check',false);checkClientUpdate(true);}});
+        addParam({component:COMPONENT,param:{name:'k2pm_discover',type:'trigger',default:false},field:{name:'Знайти нові плагіни',description:'Нові URL лише потрапляють у карантин; автоматично нічого не встановлюється.'},onChange:function(){setStorage('k2pm_discover',false);discoverPlugins();}});
 
         // Startup / behavior.
         addParam({
@@ -1130,18 +1469,18 @@
                 name:IPTV_PRESET_KEY,
                 type:'select',
                 values:{
-                    ua:'🇺🇦 Україна — публічні канали',
-                    ukr:'🇺🇦 Україномовні — весь світ',
-                    football:'⚽ Футбол — публічні спортивні канали',
-                    sports:'🏆 Спорт — світ',
-                    kids_ua:'🧒 Дітям — українське',
+                    ua:'Україна — публічні канали',
+                    ukr:'Україномовні — весь світ',
+                    football:'Футбол — публічні спортивні канали',
+                    sports:'Спорт — світ',
+                    kids_ua:'Дітям — українське',
                     kids_world:'🧒 Дітям — світ',
-                    animation:'🎨 Мультфільми / анімація',
+                    animation:'Мультфільми / анімація',
                     education:'📚 Освітні канали',
-                    news:'📰 Новини — світ',
-                    movies:'🎬 Кіно — світ',
-                    music:'🎵 Музика — світ',
-                    world:'🌍 Усі категорії — світ'
+                    news:'Новини — світ',
+                    movies:'Кіно — світ',
+                    music:'Музика — світ',
+                    world:'Усі категорії — світ'
                 },
                 default:'ua'
             },
@@ -1155,19 +1494,19 @@
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_glass_preset',type:'trigger',default:false},
-            field:{name:'✨ K2 Glass',description:'Скло + фон + плавна анімація. Не перебудовує картку фільму.'},
+            field:{name:'✨ Y7 Glass',description:'Скло + фон + плавна анімація. Не перебудовує картку фільму.'},
             onChange:function(){setStorage('k2pm_glass_preset',false);applyGlassPreset(false);}
         });
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_oled_preset',type:'trigger',default:false},
-            field:{name:'◼ K2 OLED Black',description:'Темний режим для LG/OLED: чорний фон + затемнене скло.'},
+            field:{name:'◼ Y7 OLED Black',description:'Темний режим для LG/OLED: чорний фон + затемнене скло.'},
             onChange:function(){setStorage('k2pm_oled_preset',false);applyOledPreset();}
         });
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_standard_look',type:'trigger',default:false},
-            field:{name:'↩ Стандартний вигляд Lampa',description:'Вимикає K2 Glass/Black; зовнішні дизайн-плагіни лишаються під своїми перемикачами.'},
+            field:{name:'↩ Стандартний вигляд Lampa',description:'Вимикає Y7 Glass/Black; зовнішні дизайн-плагіни лишаються під своїми перемикачами.'},
             onChange:function(){setStorage('k2pm_standard_look',false);applyStandardLook();}
         });
 
@@ -1222,7 +1561,7 @@
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_defaults',type:'trigger',default:false},
-            field:{name:'Рекомендований набір K2',description:'Якість-first: Lampac Smart Source + Sync + IPTV UA + футбол/діти + торренти + K2 Glass + перевірені утиліти.'},
+            field:{name:'Рекомендований набір Y7',description:'Якість-first: Lampac Smart Source + Sync + IPTV UA + футбол/діти + торренти + Y7 Glass + перевірені утиліти.'},
             onChange:function(){
                 try{Lampa.Storage.set('k2pm_defaults',false);}catch(e){}
                 PLUGINS.forEach(function(p){setEnabled(p,!!p.on);});
@@ -1238,7 +1577,7 @@
     function style() {
         if(document.getElementById('k2pm-css'))return;
         var s=document.createElement('style');s.id='k2pm-css';
-        s.innerHTML='.k2pm-head{padding:1em 1.1em;margin:.5em 0 1em;border-radius:.55em;background:rgba(255,255,255,.08);line-height:1.45}.k2pm-head b{font-size:1.15em}.k2pm-cat{padding:1.3em .55em .45em;opacity:.72;font-weight:700;font-size:1.02em}.k2pm-health{margin:.18em .8em .55em;opacity:.92;font-size:.82em;line-height:1.25}.k2pm-health-ok{color:#77d98c}.k2pm-health-warn{color:#f0c36b}.k2pm-health-dead{color:#ff7f7f}.k2pm-health-unknown{color:#9da3aa}.k2pm-health-summary{margin:.6em .8em 1em;padding:.65em .8em;border-radius:.45em;background:rgba(255,255,255,.055);font-size:.88em;line-height:1.35}';
+        s.innerHTML='.k2pm-head{padding:1em 1.1em;margin:.5em 0 1em;border-radius:.55em;background:rgba(255,255,255,.08);line-height:1.45}.k2pm-head b{font-size:1.15em}.k2pm-cat{padding:1.3em .55em .45em;opacity:.72;font-weight:700;font-size:1.02em}.k2pm-health{margin:.18em .8em .55em;opacity:.92;font-size:.82em;line-height:1.25}.k2pm-health-ok{color:#77d98c}.k2pm-health-warn{color:#f0c36b}.k2pm-health-dead{color:#ff7f7f}.k2pm-health-unknown{color:#9da3aa}.k2pm-health-summary{margin:.6em .8em 1em;padding:.65em .8em;border-radius:.45em;background:rgba(255,255,255,.055);font-size:.88em;line-height:1.35}.k2f-root{width:100%;height:100%;box-sizing:border-box}.k2f-body{padding:1.2em 2.2em 4em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65em}.k2f-head{grid-column:1/-1;display:flex;align-items:center;gap:1em;padding:.7em 0 1em;border-bottom:1px solid rgba(255,255,255,.08)}.k2f-logo{display:grid;place-items:center;width:3.35em;height:3.35em;border-radius:1em;background:linear-gradient(145deg,rgba(74,112,255,.98),rgba(91,62,230,.98));font-weight:900;font-size:1.08em}.k2f-headtext{min-width:0;flex:1}.k2f-summary{margin-left:auto;opacity:.75;font-size:.82em;white-space:nowrap}.k2f-title{font-size:1.55em;font-weight:800}.k2f-sub{opacity:.65;margin-top:.25em}.k2f-section{grid-column:1/-1;display:flex;align-items:center;gap:.55em;margin-top:1.15em;padding:.7em .2em .45em;font-weight:800;font-size:1.08em;opacity:.92;border-bottom:1px solid rgba(255,255,255,.06)}.k2f-icon{width:1.45em;height:1.45em;fill:currentColor;flex:0 0 auto}.k2f-row{display:flex;align-items:center;gap:1em;min-height:4.8em;padding:.9em 1em;border-radius:.85em;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.045);box-sizing:border-box}.k2f-row.focus{background:rgba(65,105,245,.9)}.k2f-row-main{min-width:0;flex:1}.k2f-row-title{font-size:1.03em;font-weight:700}.k2f-row-desc{font-size:.78em;opacity:.58;margin-top:.25em;line-height:1.25}.k2f-value{font-size:.82em;opacity:.8;white-space:nowrap}.k2f-on .k2f-value{font-weight:800}@media(max-width:720px){.k2f-body{grid-template-columns:1fr;padding:1em}.k2f-section,.k2f-head{grid-column:1}}';
         (document.head||document.documentElement).appendChild(s);
     }
 
@@ -1253,37 +1592,37 @@
         style();body.find('.k2pm-head,.k2pm-cat').remove();
         var paired=!!clientToken(),restart=false;
         try{restart=bool(Lampa.Storage.get(RESTART_KEY,false));}catch(e){}
-        body.prepend('<div class="k2pm-head"><b>K2 Plugin Manager v'+VERSION+'</b><br>'+
-            'K2 Lampac: '+(paired?'✓ підключено':'○ не підключено')+
+        body.prepend('<div class="k2pm-head"><b>Y7 Media v'+VERSION+'</b><br>'+
+            'Y7 Core: '+(paired?'✓ підключено':'○ не підключено')+
             ' · Плагінів: '+countEnabled()+
             (restart?'<br>⚠ Після вимкнення потрібен повний перезапуск Lampa.':'<br>✓ Менеджер активний.')+
             '</div>');
 
         var sec=body.find('[data-name="k2pm_pair_secure"]').first();
-        if(sec.length)sec.before('<div class="k2pm-cat">☁ K2 LAMPAC</div>');
+        if(sec.length)sec.before('<div class="k2pm-cat">Y7 CORE</div>');
         var ts=body.find('[data-name="k2pm_ts_url"]').first();
-        if(ts.length)ts.before('<div class="k2pm-cat">⚙️ LG / TORRSERVER</div>');
+        if(ts.length)ts.before('<div class="k2pm-cat">LG / TORRSERVER</div>');
 
         var hs=body.find('[data-name="k2pm_check_plugins"]').first();
-        if(hs.length)hs.before('<div class="k2pm-cat">🩺 СТАН ПЛАГІНІВ</div>');
+        if(hs.length)hs.before('<div class="k2pm-cat">СТАН ПЛАГІНІВ</div>');
 
         var sysh=body.find('[data-name="k2pm_system_health"]').first();
-        if(sysh.length)sysh.before('<div class="k2pm-cat">🧠 K2 SYSTEM / REMOTE ADMIN</div>');
+        if(sysh.length)sysh.before('<div class="k2pm-cat">Y7 SYSTEM / REMOTE ADMIN</div>');
         var kid=body.find('[data-name="'+KIDS_MODE_KEY+'"]').first();
-        if(kid.length)kid.before('<div class="k2pm-cat">🧒 ДІТИ / СИНХРОНІЗАЦІЯ</div>');
+        if(kid.length)kid.before('<div class="k2pm-cat">ДІТИ / СИНХРОНІЗАЦІЯ</div>');
         var qual=body.find('[data-name="'+QUALITY_MIN_KEY+'"]').first();
-        if(qual.length)qual.before('<div class="k2pm-cat">🏆 ЯКІСТЬ / SMART SOURCE</div>');
+        if(qual.length)qual.before('<div class="k2pm-cat">ЯКІСТЬ / SMART SOURCE</div>');
         var bkp=body.find('[data-name="k2pm_backup_now"]').first();
-        if(bkp.length)bkp.before('<div class="k2pm-cat">💾 BACKUP / UPDATE / QUARANTINE</div>');
+        if(bkp.length)bkp.before('<div class="k2pm-cat">BACKUP / UPDATE / QUARANTINE</div>');
 
         var sp=body.find('[data-name="'+START_PAGE_KEY+'"]').first();
-        if(sp.length)sp.before('<div class="k2pm-cat">🏠 ЗАПУСК / ПОВЕДІНКА</div>');
+        if(sp.length)sp.before('<div class="k2pm-cat">ЗАПУСК / ПОВЕДІНКА</div>');
 
         var ip=body.find('[data-name="'+IPTV_PRESET_KEY+'"]').first();
-        if(ip.length)ip.before('<div class="k2pm-cat">📺 IPTV — ГОТОВІ ПЛЕЙЛИСТИ</div>');
+        if(ip.length)ip.before('<div class="k2pm-cat">IPTV — ГОТОВІ ПЛЕЙЛИСТИ</div>');
 
         var look=body.find('[data-name="k2pm_glass_preset"]').first();
-        if(look.length)look.before('<div class="k2pm-cat">✨ K2 ВИГЛЯД</div>');
+        if(look.length)look.before('<div class="k2pm-cat">Y7 ВИГЛЯД</div>');
 
         Object.keys(CAT_TITLES).forEach(function(cat){
             var row = null;
@@ -1314,9 +1653,7 @@
         try{
             Lampa.Settings.listener.follow('open',function(e){
                 if(!e||e.name!==COMPONENT)return;
-                setTimeout(function(){decorate(e.body);},0);
-                setTimeout(function(){decorate(e.body);},200);
-                setTimeout(function(){maybeAutoHealth();},500);
+                setTimeout(function(){openK2FullManager();},30);
             });
         }catch(e){}
     }
@@ -1331,6 +1668,7 @@
         }catch(e){}
 
         applyV400Migration();
+        registerFullManager();
         setupSettings();
         listenSettings();
         var r=reconcile(true);
@@ -1339,6 +1677,8 @@
         heartbeat();
         if(HEARTBEAT_TIMER)clearInterval(HEARTBEAT_TIMER);
         HEARTBEAT_TIMER=setInterval(heartbeat,30000);
+        if(COMMAND_TIMER)clearInterval(COMMAND_TIMER);
+        COMMAND_TIMER=setInterval(pollAdminCommands,2500);
         setTimeout(function(){checkClientUpdate(false);},5000);
 
         window.K2PluginManager={
@@ -1352,7 +1692,8 @@
             systemHealth:checkSystemHealth,
             providerHealth:checkProviderHealth,
             admin:startRemoteAdmin,
-            backup:saveBackup
+            backup:saveBackup,
+            open:openK2FullManager
         };
         log('ready',r);
     }
@@ -1371,4 +1712,4 @@
     boot();
 })();
 
-})('4.0.0');
+})('4.1.0');
