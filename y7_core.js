@@ -1,7 +1,7 @@
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.7.0
+ * Version: 4.7.1
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.7.0';
+    var VERSION = '4.7.1';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -496,10 +496,86 @@
         return name;
     }
 
+    var Y7_MODAL_SEQ = 0;
+
+    function openQrModal(title, box, afterClose) {
+        var prev = '';
+        var ctrl = 'y7_qr_modal_' + (++Y7_MODAL_SEQ);
+        var closed = false;
+        var keyHandler = null;
+
+        try {
+            var active = Lampa.Controller && Lampa.Controller.enabled ? Lampa.Controller.enabled() : null;
+            prev = active && active.name ? active.name : '';
+        } catch (e) {}
+
+        function cleanupController() {
+            try { document.removeEventListener('keydown', keyHandler, true); } catch (e) {}
+            try { if (Lampa.Controller && Lampa.Controller.remove) Lampa.Controller.remove(ctrl); } catch (e2) {}
+            try { if (prev && Lampa.Controller && Lampa.Controller.toggle) Lampa.Controller.toggle(prev); } catch (e3) {}
+        }
+
+        function close() {
+            if (closed) return;
+            closed = true;
+            cleanupController();
+            try { Lampa.Modal.close(); } catch (e) {}
+            try { if (afterClose) afterClose(); } catch (e2) {}
+        }
+
+        // A real selector/button makes the QR window closable by OK even on builds
+        // where Lampa.Modal does not forward onBack correctly.
+        try {
+            var closeBtn = $('<div class="selector y7-qr-close" style="display:inline-block;margin-top:1em;padding:.58em 1.1em;border-radius:.55em;background:rgba(255,255,255,.13);font-weight:700">Закрити · OK / Назад</div>');
+            closeBtn.on('hover:enter click', close);
+            box.append(closeBtn);
+        } catch (e) {}
+
+        try {
+            Lampa.Modal.open({title:title,html:box,size:'medium',onBack:close});
+        } catch (e) {
+            try { Lampa.Modal.open({title:title,html:box,size:'medium'}); } catch (e2) {}
+        }
+
+        // Explicit controller is needed on some LG webOS/Lampa builds.
+        try {
+            if (Lampa.Controller && Lampa.Controller.add) {
+                Lampa.Controller.add(ctrl, {
+                    toggle:function(){
+                        try {
+                            var btn = box.find('.y7-qr-close').first();
+                            if (btn && btn.length && Lampa.Controller.collectionSet) Lampa.Controller.collectionSet(box, box);
+                            if (btn && btn.length && Lampa.Controller.collectionFocus) Lampa.Controller.collectionFocus(btn[0], box);
+                        } catch (e) {}
+                    },
+                    enter:close,
+                    ok:close,
+                    back:close
+                });
+                setTimeout(function(){
+                    try { if (!closed) Lampa.Controller.toggle(ctrl); } catch (e) {}
+                }, 0);
+            }
+        } catch (e) {}
+
+        // Last-resort hardware-key fallback: LG/webOS Back=461, Samsung Back=10009.
+        keyHandler = function(ev) {
+            if (closed) return;
+            var kc = ev && (ev.keyCode || ev.which || 0);
+            var key = String((ev && (ev.key || ev.code)) || '');
+            if (kc===27 || kc===461 || kc===10009 || kc===8 || key==='Escape' || key==='Backspace' || key==='BrowserBack' || key==='GoBack') {
+                try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+                close();
+            }
+        };
+        try { document.addEventListener('keydown', keyHandler, true); } catch (e) {}
+
+        return close;
+    }
+
     function showPairModal(data) {
-        var controller = '';
-        try { controller = Lampa.Controller.enabled().name; } catch (e) {}
         var stopped = false;
+        var closeModal = null;
         var expireAt = Date.now() + ((data.expires_in || 300) * 1000);
 
         var box = $(
@@ -514,16 +590,11 @@
 
         function close() {
             stopped = true;
-            try { Lampa.Modal.close(); } catch (e) {}
-            try { if (controller) Lampa.Controller.toggle(controller); } catch (e2) {}
+            if (closeModal) closeModal();
+            else try { Lampa.Modal.close(); } catch (e) {}
         }
 
-        Lampa.Modal.open({
-            title:'Y7 Media — безпечне підключення',
-            html:box,
-            size:'medium',
-            onBack:close
-        });
+        closeModal = openQrModal('Y7 Media — безпечне підключення', box, function(){ stopped = true; });
 
         loadQrLib(function(ok) {
             if (!ok || stopped) {
@@ -813,7 +884,7 @@
             if(!r.url)return notify('Не отримано URL керування');
             REMOTE_ADMIN_UNTIL = Date.now() + 31*60*1000;
             var box=$('<div style="padding:1em;text-align:center"><div class="k2-admin-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div>Скануй QR телефоном і введи Admin PIN.</div><div style="opacity:.65;font-size:.8em;margin-top:1em;overflow-wrap:anywhere">'+r.url+'</div></div>');
-            Lampa.Modal.open({title:'Y7 Admin',html:box,size:'medium',onBack:function(){Lampa.Modal.close();}});
+            openQrModal('Y7 Admin',box);
             loadQrLib(function(ok){if(ok){try{new QRCode(box.find('.k2-admin-qr')[0],{text:r.url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});}catch(e){}}});
         },function(){notify('✕ Не вдалося відкрити Y7 Admin');});
     }
@@ -827,7 +898,7 @@
             ensureGuestRemotePoll();
             var hours=Math.max(1,Math.ceil((r.expires_in||43200)/3600));
             var box=$('<div style="padding:1em;text-align:center"><div class="y7-remote-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div style="font-size:1.05em;font-weight:700">Y7 TV Manager · '+hours+' год</div><div style="margin-top:.55em">Сканує будь-хто — PIN не потрібен. Повне налаштування Y7 Media тільки цього TV.</div><div style="opacity:.65;font-size:.8em;margin-top:1em;overflow-wrap:anywhere">'+r.url+'</div></div>');
-            Lampa.Modal.open({title:'Y7 TV Manager',html:box,size:'medium',onBack:function(){Lampa.Modal.close();}});
+            openQrModal('Y7 TV Manager',box);
             loadQrLib(function(ok){if(ok){try{new QRCode(box.find('.y7-remote-qr')[0],{text:r.url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});}catch(e){}}});
         },function(){notify('Не вдалося створити Y7 TV Manager QR');});
     }

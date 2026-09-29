@@ -1,6 +1,6 @@
 /*
  * Y7 Kids Arcade for Lampa / Y7 Media
- * Version: 2.0.0
+ * Version: 2.0.1
  *
  * 7 mini-games:
  *  - Зоряний забіг
@@ -17,10 +17,10 @@
 (function(){
     'use strict';
 
-    var VERSION='2.0.0';
+    var VERSION='2.0.1';
     var COMPONENT='y7_kids_arcade';
     var SETTINGS_COMPONENT='y7_kids_arcade_settings';
-    var READY='__Y7_KIDS_ARCADE_200__';
+    var READY='__Y7_KIDS_ARCADE_201__';
     var STORAGE='y7_kids_arcade_v2';
     if(window[READY]) return;
     window[READY]=true;
@@ -706,7 +706,11 @@
                 toggle:function(){try{Lampa.Controller.collectionSet(root,root);}catch(e){}},
                 up:function(){press('up');},down:function(){press('down');},
                 left:function(){press('left');},right:function(){press('right');},
-                ok:function(){press('ok');},back:function(){press('back');}
+                // Different Lampa/webOS builds call the centre key either `enter` or `ok`.
+                // Register both so the physical LG remote and Y7 Remote work identically.
+                enter:function(){press('ok');},
+                ok:function(){press('ok');},
+                back:function(){press('back');}
             });
             Lampa.Controller.toggle(COMPONENT);
             setTimeout(function(){say('Y7 Ігри. Обери гру.');},250);

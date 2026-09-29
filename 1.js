@@ -6,9 +6,9 @@
 (function(){
     'use strict';
 
-    var BUNDLE_VERSION = '1.0.0';
-    if (window.__Y7_MEDIA_BUNDLE_100__) return;
-    window.__Y7_MEDIA_BUNDLE_100__ = true;
+    var BUNDLE_VERSION = '1.0.1';
+    if (window.__Y7_MEDIA_BUNDLE_101__) return;
+    window.__Y7_MEDIA_BUNDLE_101__ = true;
 
     function baseUrl(){
         try{
@@ -20,8 +20,8 @@
 
     var BASE = baseUrl();
     var FILES = [
-        BASE + 'y7_core.js?v=470',
-        BASE + 'y7_game.js?v=200'
+        BASE + 'y7_core.js?v=471',
+        BASE + 'y7_game.js?v=201'
     ];
 
     function notify(msg){
