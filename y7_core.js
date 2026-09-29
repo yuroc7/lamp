@@ -1,7 +1,7 @@
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.7.1
+ * Version: 4.9.0
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.7.1';
+    var VERSION = '4.9.0';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -55,6 +55,7 @@
     var HEALTH_FAIL_KEY = 'k2pm_health_fail_counts';
     var HEALTH_SUPPRESS_KEY = 'k2pm_health_suppressed';
     var TORR_LAST_KEY = 'k2pm_torr_last_ok';
+    var KIDS_ADMIN_KEY = 'y7_kids_admin_config_v1';
     var ADULT_CLEANUP_KEY = 'y7_adult_cleanup_v47';
     var HEAD_REMOTE_INSTALLED = false;
     var HEARTBEAT_TIMER = null;
@@ -299,17 +300,17 @@
 
     function secureOnlineUrl() {
         var t = clientToken();
-        return t ? baseUrl() + '/online/js/' + encodeURIComponent(t) + '?y7=470' : '';
+        return t ? baseUrl() + '/online/js/' + encodeURIComponent(t) + '?y7=480' : '';
     }
 
     function secureSisiUrl() {
         var t = clientToken();
-        return t ? baseUrl() + '/sisi/js/' + encodeURIComponent(t) + '?y7=470' : '';
+        return t ? baseUrl() + '/sisi/js/' + encodeURIComponent(t) + '?y7=480' : '';
     }
 
     function secureSyncUrl() {
         var t = clientToken();
-        return t ? baseUrl() + '/sync/js/' + encodeURIComponent(t) + '?y7=470' : '';
+        return t ? baseUrl() + '/sync/js/' + encodeURIComponent(t) + '?y7=480' : '';
     }
 
     function k2Api(path) {
@@ -474,6 +475,80 @@
             x.ontimeout = function(){ fail && fail({error:'timeout'}); };
             x.send(data ? JSON.stringify(data) : null);
         } catch (e) { fail && fail({error:String(e)}); }
+    }
+
+    function kidsStoreConfig(rewards){
+        if(!rewards||typeof rewards!=='object')return;
+        try{Lampa.Storage.set(KIDS_ADMIN_KEY,rewards);}catch(e){try{localStorage.setItem(KIDS_ADMIN_KEY,JSON.stringify(rewards));}catch(e2){}}
+        try{window.dispatchEvent(new CustomEvent('y7:kids-config',{detail:rewards}));}catch(e3){}
+    }
+
+    function kidsGetConfig(){
+        try{return Lampa.Storage.get(KIDS_ADMIN_KEY,null)||null;}catch(e){}
+        try{return JSON.parse(localStorage.getItem(KIDS_ADMIN_KEY)||'null');}catch(e2){return null;}
+    }
+
+    function kidsRefreshContent(done){
+        var t=clientToken();if(!t){if(done)done(null);return;}
+        ajax('GET',k2Api('/k2/kids/content?token='+encodeURIComponent(t)),null,function(r){
+            if(r&&r.rewards)kidsStoreConfig(r.rewards);
+            try{window.__Y7_KIDS_CONTENT__=r||{};window.dispatchEvent(new CustomEvent('y7:kids-content',{detail:r||{}}));}catch(e){}
+            if(done)done(r||{});
+        },function(){if(done)done(null);});
+    }
+
+    function kidsReportProgress(progress){
+        var t=clientToken();if(!t)return;
+        ajax('POST',k2Api('/k2/kids/progress'),{token:t,progress:progress||{}},function(){},function(){});
+    }
+
+    function kidsLaunchReward(app,minutes,done){
+        var cfg=kidsGetConfig()||{};
+        if(app==='playstation'){
+            notify('🎮 PlayStation: зароблено '+Math.max(1,parseInt(minutes,10)||30)+' хв. Покажи нагороду дорослому.');
+            if(done)done('manual');
+            return;
+        }
+        var key=app==='youtube'?'youtube':'megogo';
+        var appId=String(cfg[key+'_app_id']||'').trim(),url=String(cfg[key+'_url']||'').trim();
+        function fallback(){
+            var ok=false;
+            if(url){
+                try{if(window.Lampa&&Lampa.Utils&&Lampa.Utils.openURL){Lampa.Utils.openURL(url);ok=true;}}catch(e){}
+                if(!ok)try{window.open(url,'_blank');ok=true;}catch(e2){}
+            }
+            if(done)done(ok?'url':'unavailable');
+        }
+        function launch(id){
+            if(!id)return fallback();
+            try{
+                webOS.service.request('luna://com.webos.applicationManager',{method:'launch',parameters:{id:id},onSuccess:function(){if(done)done('app');},onFailure:function(){fallback();}});
+            }catch(e){fallback();}
+        }
+        if(window.webOS&&webOS.service&&webOS.service.request){
+            if(appId){launch(appId);return;}
+            // App ids differ between LG/webOS generations. Detect installed app by title/id first.
+            try{
+                webOS.service.request('luna://com.webos.applicationManager',{method:'listApps',parameters:{},onSuccess:function(r){
+                    var list=(r&&r.apps)||r||[],needle=key==='youtube'?'youtube':'megogo',found='';
+                    if(Array.isArray(list))for(var i=0;i<list.length;i++){var a=list[i]||{},hay=(String(a.id||'')+' '+String(a.title||'')+' '+String(a.name||'')).toLowerCase();if(hay.indexOf(needle)>=0){found=String(a.id||'');break;}}
+                    if(found)launch(found);else fallback();
+                },onFailure:function(){fallback();}});
+                return;
+            }catch(e2){}
+        }
+        fallback();
+    }
+
+    function installKidsBridge(){
+        window.Y7KidsBridge={
+            version:'1.0',
+            getConfig:kidsGetConfig,
+            refreshContent:kidsRefreshContent,
+            reportProgress:kidsReportProgress,
+            openReward:kidsLaunchReward
+        };
+        setTimeout(function(){kidsRefreshContent();},700);
     }
 
     function loadQrLib(done) {
@@ -908,101 +983,125 @@
         ajax('POST',k2Api('/k2/remote/revoke'),{token:t},function(){REMOTE_GUEST_UNTIL=0;notify('Y7 TV Manager для цього TV закрито');},function(){notify('Не вдалося закрити Y7 TV Manager');});
     }
 
-    function y7RemoteSvg() {
-        return '<svg viewBox="0 0 64 64" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">'+
-        '<rect x="18" y="5" width="28" height="54" rx="8" stroke="currentColor" stroke-width="5"/>'+
-        '<circle cx="32" cy="46" r="3" fill="currentColor"/>'+
-        '<path d="M32 15v18M23 24h18" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>'+
-        '</svg>';
-    }
 
-    function findLegacyPhoneHeadButton() {
-        try {
-            var direct=$('.open--broadcast,.open--keyboard,.open--remote,.open--phone,.open--qr,.head__action--broadcast,.head__action--keyboard').first();
-            if(direct.length)return direct;
+function y7RemoteSvg() {
+    // Deliberately unique Y7 QR icon. We no longer reuse Lampa's stock
+    // "network / connection setup" button because on some LG builds it
+    // opens the native network pairing screen instead of Y7 TV Manager.
+    return '<svg viewBox="0 0 64 64" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">'+
+    '<rect x="7" y="7" width="17" height="17" rx="3" stroke="currentColor" stroke-width="4"/>'+
+    '<rect x="40" y="7" width="17" height="17" rx="3" stroke="currentColor" stroke-width="4"/>'+
+    '<rect x="7" y="40" width="17" height="17" rx="3" stroke="currentColor" stroke-width="4"/>'+
+    '<path d="M39 39h7v7h-7zM49 39h8v8M39 50h8v7M51 51h6v6" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>'+
+    '<path d="M26 30l5 8 5-8M31 38v8M38 30h11l-7 16" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '</svg>';
+}
 
-            var found=null;
-            $('.head .selector,.head__right .selector,.head__buttons .selector,.head__actions .selector').each(function(){
-                if(found)return;
-                var e=$(this);
-                if(e.hasClass('y7-head-remote')||e.hasClass('open--settings')||e.hasClass('open--search'))return;
-                var cls=String(e.attr('class')||'').toLowerCase();
-                var txt=(String(e.attr('title')||'')+' '+String(e.attr('aria-label')||'')+' '+String(e.text()||'')).toLowerCase();
-                if(/broadcast|keyboard|phone|qr|connect/.test(cls) ||
-                   /ввод.+телефон|телефон.+ввод|настройка связи|налаштування зв.?язку|phone input|remote input/.test(txt)){
-                    found=e;
-                }
-            });
-            return found||$();
-        } catch(e){return $();}
-    }
+function openY7Phone() {
+    // One predictable entry point: unpaired TV -> pairing QR,
+    // paired TV -> private Y7 TV Manager QR.
+    if (clientToken()) startGuestRemote();
+    else startPairing();
+}
 
-    function bindY7HeadButton(btn) {
-        if(!btn||!btn.length)return false;
-        try {
-            btn.off('hover:enter click');
-            var cls=String(btn.attr('class')||'').split(/\s+/).filter(function(c){
-                return c && !/(broadcast|keyboard|phone|qr|connect)/i.test(c);
-            });
-            btn.attr('class',cls.join(' ')).addClass('selector y7-head-remote');
-            btn.removeAttr('id data-action');
-            btn.attr('title','Y7 TV Manager').attr('aria-label','Y7 TV Manager');
-            btn.html('<div class="y7-head-remote__ico">'+y7RemoteSvg()+'</div>');
-            btn.on('hover:enter click',function(e){
-                try{if(e){e.preventDefault();e.stopImmediatePropagation();}}catch(_e){}
-                startGuestRemote();
-                return false;
-            });
+function removeStockPhoneButtons() {
+    try {
+        // These are Lampa connection/keyboard/broadcast buttons, not Y7.
+        // Hide only explicit stock selectors; never hide Search/Settings/Profile.
+        var selectors=[
+            '.open--broadcast','.open--keyboard','.open--remote','.open--phone','.open--qr',
+            '.head__action--broadcast','.head__action--keyboard','.head__action--phone',
+            '.head__action--qr','.head__action--connect'
+        ].join(',');
+        $(selectors).each(function(){
+            var e=$(this);
+            if(e.hasClass('y7-head-remote'))return;
+            e.attr('data-y7-stock-hidden','1').css('display','none');
+        });
+
+        // Some Lampa builds use generic selector shells with only a title.
+        // Hide them only when the visible/title text clearly says connection setup.
+        $('.head .selector,.head__right .selector,.head__buttons .selector,.head__actions .selector').each(function(){
+            var e=$(this);
+            if(e.hasClass('y7-head-remote')||e.hasClass('open--settings')||e.hasClass('open--search')||e.hasClass('open--profile'))return;
+            var txt=(String(e.attr('title')||'')+' '+String(e.attr('aria-label')||'')+' '+String(e.text()||'')).toLowerCase();
+            if(/настройка связи|налаштування зв.?язку|connection setup|network pairing|phone input|remote input|ввод з телефону|ввод с телефона/.test(txt)){
+                e.attr('data-y7-stock-hidden','1').css('display','none');
+            }
+        });
+    } catch(e){}
+}
+
+function bindY7HeadButton(btn) {
+    if(!btn||!btn.length)return false;
+    try {
+        btn.off('hover:enter click');
+        btn.removeClass('open--broadcast open--keyboard open--remote open--phone open--qr head__action--broadcast head__action--keyboard head__action--phone head__action--qr head__action--connect open--settings');
+        btn.addClass('selector y7-head-remote');
+        btn.removeAttr('id data-action');
+        btn.css('display','');
+        btn.attr('title','Y7 TV Manager').attr('aria-label','Y7 TV Manager');
+        btn.html('<div class="y7-head-remote__ico">'+y7RemoteSvg()+'</div>');
+        btn.on('hover:enter click',function(e){
+            try{if(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();}}catch(_e){}
+            openY7Phone();
+            return false;
+        });
+        return true;
+    } catch(e){return false;}
+}
+
+function installY7HeadRemote() {
+    try {
+        removeStockPhoneButtons();
+
+        var current=$('.y7-head-remote').first();
+        if(current.length){
+            bindY7HeadButton(current);
+            cleanupAdultDuplicates();
             return true;
-        } catch(e){return false;}
-    }
-
-    function installY7HeadRemote() {
-        try {
-            // Already mounted in the current header.
-            var current=$('.y7-head-remote').first();
-            if(current.length){
-                bindY7HeadButton(current);
-                cleanupAdultDuplicates();
-                return true;
-            }
-
-            // Preferred path: replace Lampa's stock phone/broadcast button that
-            // currently opens "Настройка связи".
-            var legacy=findLegacyPhoneHeadButton();
-            if(legacy.length){
-                bindY7HeadButton(legacy);
-                cleanupAdultDuplicates();
-                return true;
-            }
-
-            // Fallback: clone the Settings shell so sizing/focus exactly matches
-            // this Lampa build, and insert Y7 immediately before Settings.
-            var settings=$('.open--settings').first();
-            if(settings.length){
-                var b=settings.clone(false,false);
-                b.removeClass('open--settings').addClass('y7-head-remote');
-                b.removeAttr('id data-action');
-                bindY7HeadButton(b);
-                settings.before(b);
-                cleanupAdultDuplicates();
-                return true;
-            }
-        } catch(e){}
-        return false;
-    }
-
-    function keepY7HeadRemote() {
-        installY7HeadRemote();
-        if(!window.__Y7_HEAD_REMOTE_TIMER__){
-            window.__Y7_HEAD_REMOTE_TIMER__=setInterval(function(){
-                installY7HeadRemote();
-                cleanupAdultDuplicates();
-            },2500);
         }
-    }
 
-    function remotePlatformCaps() {
+        // The most predictable route on LG/webOS is our own button cloned only
+        // from Settings visual markup. clone(false,false) deliberately copies no
+        // stock network/connection events, so clicking this QR can only call Y7.
+        var settings=$('.open--settings').first();
+        if(settings.length){
+            var b=settings.clone(false,false);
+            b.removeClass('open--settings').addClass('y7-head-remote');
+            b.removeAttr('id data-action');
+            bindY7HeadButton(b);
+            settings.before(b);
+            cleanupAdultDuplicates();
+            return true;
+        }
+
+        // Last fallback for Lampa layouts without a discoverable Settings shell.
+        // If Head.addIcon returns a node, bind it explicitly; its callback is also
+        // already Y7-only.
+        try{
+            if(Lampa.Head&&Lampa.Head.addIcon){
+                var created=Lampa.Head.addIcon(y7RemoteSvg(),openY7Phone);
+                var q=created&&created.jquery?created:$(created||[]);
+                if(q.length){bindY7HeadButton(q);cleanupAdultDuplicates();return true;}
+            }
+        }catch(_headErr){}
+    } catch(e){}
+    return false;
+}
+
+function keepY7HeadRemote() {
+    installY7HeadRemote();
+    if(!window.__Y7_HEAD_REMOTE_TIMER__){
+        window.__Y7_HEAD_REMOTE_TIMER__=setInterval(function(){
+            removeStockPhoneButtons();
+            installY7HeadRemote();
+            cleanupAdultDuplicates();
+        },1800);
+    }
+}
+
+function remotePlatformCaps() {
         var platform='browser', systemVolume=false, playerVolume=true, systemSettings=false;
         try {
             if(Lampa.Platform && Lampa.Platform.is){
@@ -1410,6 +1509,8 @@
         else if(c.type==='update'){setStorage(UPDATE_CHANNEL_KEY,c.channel||'stable');checkClientUpdate(true,c.channel||'stable');}
         else if(c.type==='update_channel')setStorage(UPDATE_CHANNEL_KEY,c.channel||'stable');
         else if(c.type==='extra_add'){if(addExtraPlugin(c.plugin||{}))notify('✓ Новий плагін додано з карантину');}
+        else if(c.type==='kids_config'){kidsStoreConfig(c.rewards||{});}
+        else if(c.type==='kids_content_refresh'){kidsRefreshContent();}
         else if(c.type==='remote_key')remoteControllerAction(String(c.key||''));
         else if(c.type==='remote_text')remoteTextInput(c.text||'');
         setTimeout(heartbeat,250);
@@ -1431,6 +1532,7 @@
             update_channel:getStorage(UPDATE_CHANNEL_KEY,'stable'),plugins:plist,settings:settings,
             remote_caps:remotePlatformCaps()
         },function(r){
+            if(r.policy&&r.policy.kids_rewards)kidsStoreConfig(r.policy.kids_rewards);
             var cs=r.commands||[];for(var i=0;i<cs.length;i++)executeCommand(cs[i]);
             if(r.remote_active){REMOTE_GUEST_UNTIL=Date.now()+Math.max(1000,(r.remote_expires_in||30)*1000);ensureGuestRemotePoll();}
         },function(){});
@@ -1808,6 +1910,9 @@
                     selectRow('IPTV пресет','Україна, футбол, спорт, Kids, Animation та інші списки.',iv,String(getStorage(IPTV_PRESET_KEY,'ua')),function(v){applyIptvPreset(v,false);});
                     row('Футбол','Швидко ввімкнути football-пресет.','APPLY',function(){applyIptvPreset('football',false);});
                     toggleRow('Y7 Kids','Kids UA + блокування 18+. Вимкнення захищене Y7 Admin PIN.',function(){return bool(getStorage(KIDS_MODE_KEY,false));},function(v){applyKidsMode(v,false);});
+                    row('Y7 Ігри','30 навчальних ігор, тематичні кімнати, гумор, рівні та власні герої.','OPEN',function(){try{if(window.Y7KidsArcade&&Y7KidsArcade.open)Y7KidsArcade.open();else notify('Y7 Ігри ще завантажуються…');}catch(e){notify('Y7 Ігри недоступні');}});
+                    row('Живий акваріум','Повноекранна жива заставка з рибками та дитячими малюнками.','OPEN',function(){try{if(window.Y7KidsArcade&&Y7KidsArcade.openAquarium)Y7KidsArcade.openAquarium();else notify('Y7 Ігри ще завантажуються…');}catch(e){notify('Акваріум недоступний');}});
+                    row('Малюнки та нагороди','Додати малюнки, налаштувати MEGOGO / YouTube / PlayStation з телефона.','PHONE',startRemoteAdmin);
                     PLUGINS.forEach(function(p){if(p.cat==='kids')pluginRow(p);});
 
                     section('Онлайн-джерела','film');
@@ -2092,7 +2197,7 @@
     function style() {
         if(document.getElementById('k2pm-css'))return;
         var s=document.createElement('style');s.id='k2pm-css';
-        s.innerHTML='.k2pm-head{padding:1em 1.1em;margin:.5em 0 1em;border-radius:.55em;background:rgba(255,255,255,.08);line-height:1.45}.k2pm-head b{font-size:1.15em}.k2pm-cat{padding:1.3em .55em .45em;opacity:.72;font-weight:700;font-size:1.02em}.k2pm-health{margin:.18em .8em .55em;opacity:.92;font-size:.82em;line-height:1.25}.k2pm-health-ok{color:#77d98c}.k2pm-health-warn{color:#f0c36b}.k2pm-health-dead{color:#ff7f7f}.k2pm-health-unknown{color:#9da3aa}.k2pm-health-summary{margin:.6em .8em 1em;padding:.65em .8em;border-radius:.45em;background:rgba(255,255,255,.055);font-size:.88em;line-height:1.35}.y7-head-remote__ico{width:1.35em;height:1.35em;display:grid;place-items:center}.y7-head-remote__ico svg{width:100%;height:100%;display:block}.k2f-root{width:100%;height:100%;min-height:0;overflow:hidden;box-sizing:border-box}.k2f-root>.scroll{height:100%;max-height:100%;min-height:0;overflow:hidden}.k2f-root>.scroll>.scroll__content{height:100%;min-height:0;box-sizing:border-box}.k2f-body{padding:.45em 1.05em 1.5em;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.38em .48em;box-sizing:border-box}.k2f-head{grid-column:1/-1;display:flex;align-items:center;gap:.7em;padding:.25em 0 .5em;border-bottom:1px solid rgba(255,255,255,.07)}.k2f-logo{display:grid;place-items:center;width:2.55em;height:2.55em;border-radius:.72em;background:linear-gradient(145deg,rgba(74,112,255,.98),rgba(91,62,230,.98));font-weight:900;font-size:.96em}.k2f-headtext{min-width:0;flex:1}.k2f-summary{margin-left:auto;opacity:.72;font-size:.72em;white-space:nowrap}.k2f-title{font-size:1.22em;font-weight:800}.k2f-sub{opacity:.62;margin-top:.08em;font-size:.72em}.k2f-section{grid-column:1/-1;display:flex;align-items:center;gap:.42em;margin-top:.48em;padding:.36em .08em .25em;font-weight:800;font-size:.88em;opacity:.9;border-bottom:1px solid rgba(255,255,255,.055)}.k2f-icon{width:1.15em;height:1.15em;fill:currentColor;flex:0 0 auto}.k2f-row{display:flex;align-items:center;gap:.62em;min-height:3.35em;padding:.48em .65em;border-radius:.62em;background:rgba(255,255,255,.052);border:1px solid rgba(255,255,255,.04);box-sizing:border-box}.k2f-row.focus{background:rgba(65,105,245,.92);border-color:rgba(255,255,255,.18)}.k2f-row-main{min-width:0;flex:1}.k2f-row-title{font-size:.88em;font-weight:700;line-height:1.1}.k2f-row-desc{font-size:.64em;opacity:.55;margin-top:.14em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.k2f-value{font-size:.68em;opacity:.82;white-space:nowrap}.k2f-on .k2f-value{font-weight:800}@media(max-width:1400px){.k2f-body{grid-template-columns:repeat(2,minmax(0,1fr));padding:.55em 1em 1.7em}}@media(max-width:720px){.k2f-body{grid-template-columns:1fr;padding:.6em}.k2f-section,.k2f-head{grid-column:1}.k2f-row{min-height:3.15em}}';
+        s.innerHTML='.k2pm-head{padding:1em 1.1em;margin:.5em 0 1em;border-radius:.55em;background:rgba(255,255,255,.08);line-height:1.45}.k2pm-head b{font-size:1.15em}.k2pm-cat{padding:1.3em .55em .45em;opacity:.72;font-weight:700;font-size:1.02em}.k2pm-health{margin:.18em .8em .55em;opacity:.92;font-size:.82em;line-height:1.25}.k2pm-health-ok{color:#77d98c}.k2pm-health-warn{color:#f0c36b}.k2pm-health-dead{color:#ff7f7f}.k2pm-health-unknown{color:#9da3aa}.k2pm-health-summary{margin:.6em .8em 1em;padding:.65em .8em;border-radius:.45em;background:rgba(255,255,255,.055);font-size:.88em;line-height:1.35}.y7-head-remote__ico{width:1.5em;height:1.5em;display:grid;place-items:center;filter:drop-shadow(0 0 .22em rgba(101,175,255,.7))}.y7-head-remote__ico svg{width:100%;height:100%;display:block}.k2f-root{width:100%;height:100%;min-height:0;overflow:hidden;box-sizing:border-box}.k2f-root>.scroll{height:100%;max-height:100%;min-height:0;overflow:hidden}.k2f-root>.scroll>.scroll__content{height:100%;min-height:0;box-sizing:border-box}.k2f-body{padding:.7em 1.25em 2em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.62em .72em;box-sizing:border-box}.k2f-head{grid-column:1/-1;display:flex;align-items:center;gap:.7em;padding:.25em 0 .5em;border-bottom:1px solid rgba(255,255,255,.07)}.k2f-logo{display:grid;place-items:center;width:2.55em;height:2.55em;border-radius:.72em;background:linear-gradient(145deg,rgba(74,112,255,.98),rgba(91,62,230,.98));font-weight:900;font-size:.96em}.k2f-headtext{min-width:0;flex:1}.k2f-summary{margin-left:auto;opacity:.72;font-size:.72em;white-space:nowrap}.k2f-title{font-size:1.48em;font-weight:850}.k2f-sub{opacity:.72;margin-top:.14em;font-size:.86em;line-height:1.25}.k2f-section{grid-column:1/-1;display:flex;align-items:center;gap:.55em;margin-top:.7em;padding:.48em .1em .34em;font-weight:850;font-size:1.02em;opacity:.96;border-bottom:1px solid rgba(255,255,255,.09)}.k2f-icon{width:1.15em;height:1.15em;fill:currentColor;flex:0 0 auto}.k2f-row{display:flex;align-items:center;gap:.8em;min-height:4.75em;padding:.78em .9em;border-radius:.9em;background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.075);box-sizing:border-box;box-shadow:0 .45em 1.4em rgba(0,0,0,.12)}.k2f-row.focus{background:rgba(65,105,245,.92);border-color:rgba(255,255,255,.18)}.k2f-row-main{min-width:0;flex:1}.k2f-row-title{font-size:1.04em;font-weight:780;line-height:1.15}.k2f-row-desc{font-size:.78em;opacity:.68;margin-top:.24em;line-height:1.25;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.k2f-value{font-size:.82em;opacity:.9;white-space:nowrap;font-weight:700}.k2f-on .k2f-value{font-weight:800}@media(max-width:1100px){.k2f-body{grid-template-columns:1fr;padding:.7em 1em 2em}}@media(max-width:720px){.k2f-body{grid-template-columns:1fr;padding:.65em}.k2f-section,.k2f-head{grid-column:1}.k2f-row{min-height:4.35em}.k2f-row-title{font-size:1.08em}.k2f-row-desc{font-size:.82em}}';
         (document.head||document.documentElement).appendChild(s);
     }
 
@@ -2183,6 +2288,7 @@
         }catch(e){}
 
         applyV400Migration();
+        installKidsBridge();
         registerFullManager();
         setupSettings();
         listenSettings();
@@ -2234,4 +2340,4 @@
     boot();
 })();
 
-})('4.1.0');
+})('4.9.0');

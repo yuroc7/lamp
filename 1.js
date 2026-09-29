@@ -1,14 +1,14 @@
 /*
  * Y7 Media bundle bootstrap
- * Keeps Y7 Media v4.7.1 core unchanged in y7_core.js
+ * Loads Y7 Media v4.9.0 core from y7_core.js
  * and automatically loads Y7 Kids Arcade / Games.
  */
 (function(){
     'use strict';
 
-    var BUNDLE_VERSION = '1.1.0';
-    if (window.__Y7_MEDIA_BUNDLE_110__) return;
-    window.__Y7_MEDIA_BUNDLE_110__ = true;
+    var BUNDLE_VERSION = '1.3.0';
+    if (window.__Y7_MEDIA_BUNDLE_130__) return;
+    window.__Y7_MEDIA_BUNDLE_130__ = true;
 
     function baseUrl(){
         try{
@@ -20,8 +20,8 @@
 
     var BASE = baseUrl();
     var FILES = [
-        BASE + 'y7_core.js?v=471',
-        BASE + 'y7_game.js?v=300'
+        BASE + 'y7_core.js?v=490',
+        BASE + 'y7_game.js?v=400'
     ];
 
     function notify(msg){
