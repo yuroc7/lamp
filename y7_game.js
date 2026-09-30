@@ -1,6 +1,6 @@
 /*
  * Y7 Kids Arcade for Lampa / Y7 Media
- * Version: 4.4.0
+ * Version: 4.4.1
  *
  * 31 mini-games, multi-level progression, themed rooms and randomized tasks:
  *  - Зоряний забіг, Склади слово, Приклади, Порахуй друзів
@@ -15,10 +15,10 @@
 (function(){
     'use strict';
 
-    var VERSION='4.4.0';
-    var COMPONENT='y7_kids_arcade';
-    var SETTINGS_COMPONENT='y7_kids_arcade_settings';
-    var READY='__Y7_KIDS_ARCADE_430__';
+    var VERSION='4.4.1';
+    var COMPONENT='y7_kids_arcade_441';
+    var SETTINGS_COMPONENT='y7_kids_arcade_settings_441';
+    var READY='__Y7_KIDS_ARCADE_441__';
     var STORAGE='y7_kids_arcade_v4';
     if(window[READY]) return;
     window[READY]=true;
@@ -882,6 +882,7 @@
     var ART_IMAGES={};
     var CONTENT_REV=0;
     var REWARD_CONFIG=null;
+    var REMOTE_PROGRESS={};
 
     function rewardDefaults(){return {
         enabled:false,megogo_enabled:true,youtube_enabled:true,playstation_enabled:true,
@@ -933,7 +934,7 @@
         return REWARD_CONFIG=rewardDefaults();
     }
     try{if(window.__Y7_KIDS_CONTENT__)ingestKidsContent(window.__Y7_KIDS_CONTENT__);}catch(e){}
-    try{window.addEventListener('y7:kids-content',function(e){ingestKidsContent((e&&e.detail)||{});});window.addEventListener('y7:kids-config',function(e){setRewardConfig((e&&e.detail)||{});});window.addEventListener('y7:kids-prefs',function(e){try{state=overlayPrefs(state||readState(),(e&&e.detail)||{});saveState(state);}catch(_e){}});}catch(e){}
+    try{window.addEventListener('y7:kids-content',function(e){ingestKidsContent((e&&e.detail)||{});});window.addEventListener('y7:kids-config',function(e){setRewardConfig((e&&e.detail)||{});});}catch(e){}
     setTimeout(function(){try{if(window.Y7KidsBridge&&Y7KidsBridge.refreshContent)Y7KidsBridge.refreshContent(function(p){if(p)ingestKidsContent(p);});}catch(e){}},1200);
 
     function defaults(){
@@ -2371,12 +2372,20 @@ function drawHeroes(){
         };
     }
 
+    function ensureGameComponent(){
+        try{if(window.Lampa&&Lampa.Component&&Lampa.Component.add)Lampa.Component.add(COMPONENT,Arcade);return true;}catch(e){try{if(Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Ігри: помилка реєстрації компонента');}catch(_e){}return false;}
+    }
     function openArcade(){
-        try{Lampa.Activity.push({url:'',title:'Y7 Ігри',component:COMPONENT,page:1});}catch(e){}
+        if(!ensureGameComponent())return;
+        try{
+            Lampa.Activity.push({url:'y7://games/4.4.1',title:'Y7 Ігри',component:COMPONENT,page:1});
+            setTimeout(function(){try{if(!document.querySelector('.y7a-root')&&Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Ігри не відкрились. Перезапусти Lampa один раз.');}catch(e){}},900);
+        }catch(e){try{if(Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Ігри: '+String(e&&e.message||e));}catch(_e){}}
     }
 
     function openAquarium(screensaver){
-        try{window.__Y7_START_AQUARIUM__=true;window.__Y7_AQUARIUM_SCREENSAVER__=!!screensaver;Lampa.Activity.push({url:'',title:'Y7 Акваріум',component:COMPONENT,page:1});}catch(e){}
+        if(!ensureGameComponent())return;
+        try{window.__Y7_START_AQUARIUM__=true;window.__Y7_AQUARIUM_SCREENSAVER__=!!screensaver;Lampa.Activity.push({url:'y7://aquarium/4.4.1',title:'Y7 Акваріум',component:COMPONENT,page:1});}catch(e){try{if(Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Акваріум: '+String(e&&e.message||e));}catch(_e){}}
     }
 
     var Y7_IDLE_LAST=Date.now(),Y7_IDLE_TIMER=0,Y7_IDLE_MOVE=0;
@@ -2417,7 +2426,7 @@ function drawHeroes(){
     }
 
     function register(){
-        try{Lampa.Component.add(COMPONENT,Arcade);}catch(e){}
+        ensureGameComponent();
 
         try{
             if(Lampa.Menu&&Lampa.Menu.addButton&&!document.querySelector('.y7-kids-arcade-menu')){
@@ -2449,6 +2458,8 @@ function drawHeroes(){
             }
         }catch(e){}
     }
+
+    window.Y7GamesDiagnostics={version:VERSION,component:COMPONENT,ready:READY};
 
     function init(){
         if(typeof Lampa==='undefined'||!Lampa.Component||!Lampa.Activity){setTimeout(init,220);return;}

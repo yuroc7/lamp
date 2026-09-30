@@ -1,7 +1,7 @@
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.0
+ * Version: 4.13.2
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.13.0';
+    var VERSION = '4.13.2';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -478,6 +478,22 @@
             x.ontimeout = function(){ fail && fail({error:'timeout'}); };
             x.send(data ? JSON.stringify(data) : null);
         } catch (e) { fail && fail({error:String(e)}); }
+    }
+
+    function ajaxSimpleGet(url, ok, fail) {
+        try {
+            var x = new XMLHttpRequest();
+            x.open('GET', url, true);
+            x.timeout = 10000;
+            x.onload = function(){
+                var j=null;try{j=JSON.parse(x.responseText||'{}');}catch(e){}
+                if(x.status>=200&&x.status<300)ok&&ok(j||{});
+                else fail&&fail(j||{error:'HTTP '+x.status,status:x.status});
+            };
+            x.onerror=function(){fail&&fail({error:'network',status:0});};
+            x.ontimeout=function(){fail&&fail({error:'timeout',status:0});};
+            x.send(null);
+        } catch(e){fail&&fail({error:String(e),status:0});}
     }
 
     function kidsStoreConfig(rewards){
@@ -992,16 +1008,33 @@
 
 
     function startGuestRemote() {
-        var t=clientToken(); if(!t)return notify('Спочатку підключи Y7 Core.');
-        ajax('POST',k2Api('/k2/remote/start'),{token:t},function(r){
-            if(!r.url)return notify('Не отримано URL Y7 TV Manager');
+        var tok=clientToken(); if(!tok)return startPairing();
+        function showRemote(r){
+            if(!r||!r.url)return notify('Y7 TV Manager: сервер не повернув URL');
             REMOTE_GUEST_UNTIL=Date.now()+((r.expires_in||43200)*1000);
             ensureGuestRemotePoll();
             var hours=Math.max(1,Math.ceil((r.expires_in||43200)/3600));
-            var box=$('<div style="padding:1em;text-align:center"><div class="y7-remote-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div style="font-size:1.05em;font-weight:700">Y7 TV Manager · '+hours+' год</div><div style="margin-top:.55em">Сканує будь-хто — PIN не потрібен. Повне налаштування Y7 Media тільки цього TV.</div><div style="opacity:.65;font-size:.8em;margin-top:1em;overflow-wrap:anywhere">'+r.url+'</div></div>');
+            var box=$('<div style="padding:1em;text-align:center"><div class="y7-remote-qr" style="width:220px;height:220px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div style="font-size:1.05em;font-weight:700">Y7 TV Manager · '+hours+' год</div><div style="margin-top:.55em">Скануй телефоном. Повне налаштування Y7 цього TV.</div><div style="opacity:.75;font-size:.82em;margin-top:1em;overflow-wrap:anywhere">'+r.url+'</div></div>');
             openQrModal('Y7 TV Manager',box);
-            loadQrLib(function(ok){if(ok){try{new QRCode(box.find('.y7-remote-qr')[0],{text:r.url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});}catch(e){}}});
-        },function(){notify('Не вдалося створити Y7 TV Manager QR');});
+            loadQrLib(function(ok){
+                if(ok){try{new QRCode(box.find('.y7-remote-qr')[0],{text:r.url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});return;}catch(e){}}
+                try{box.find('.y7-remote-qr').html('<div style="color:#111;padding:22px 8px;font-size:14px;line-height:1.35">QR-бібліотека не завантажилась.<br><br>Відкрий адресу нижче телефоном.</div>');}catch(e2){}
+            });
+        }
+        function failed(err){
+            var st=err&&err.status||0,reason=String(err&&err.error||'network');
+            if(st===401){
+                try{Lampa.Storage.set(CLIENT_TOKEN_KEY,'');}catch(e){}
+                notify('Y7: прив’язка TV застаріла. Створюю новий QR підключення.');
+                setTimeout(startPairing,250);return;
+            }
+            notify('Y7 TV Manager: '+reason+'. Перевір сервер 9120.');
+        }
+        // GET without JSON Content-Type avoids CORS preflight bugs on older LG/webOS.
+        ajaxSimpleGet(k2Api('/k2/remote/start?token='+encodeURIComponent(tok)+'&_='+Date.now()),showRemote,function(firstErr){
+            // Compatibility fallback for older server packages.
+            ajax('POST',k2Api('/k2/remote/start'),{token:tok},showRemote,function(secondErr){failed(secondErr||firstErr);});
+        });
     }
 
     function stopGuestRemote() {
@@ -2377,4 +2410,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.0');
+})('4.13.2');
