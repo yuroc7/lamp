@@ -1294,7 +1294,7 @@ module.exports = QRCode;
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.4
+ * Version: 4.13.6
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -1315,7 +1315,7 @@ module.exports = QRCode;
 (function () {
     'use strict';
 
-    var VERSION = '4.13.4';
+    var VERSION = '4.13.6';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -1496,6 +1496,52 @@ module.exports = QRCode;
 
     function norm(u) {
         return String(u || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+    }
+
+    function dupNorm(u) {
+        // Duplicate cleanup is intentionally stricter than normal plugin-family matching:
+        // keep query/token variants separate and only collapse the same installed address.
+        return String(u || '').trim().replace(/\/+$/, '').toLowerCase();
+    }
+
+    function cleanupPluginDuplicates(quiet) {
+        var before=registry(), beforeCount=before.length, groups={}, removed=0, changed=false;
+        for(var i=0;i<before.length;i++){
+            var raw=purl(before[i]),k=dupNorm(raw);if(!k)continue;
+            if(!groups[k])groups[k]=[];
+            groups[k].push(before[i]);
+        }
+        Object.keys(groups).forEach(function(k){
+            var g=groups[k]; if(g.length<2)return;
+            var keep=g[0],keepUrl=purl(keep),target=g.length-1;
+            // Some Lampa builds remove one matching row, others remove all.
+            // Remove up to N-1 times, then restore one copy only if needed.
+            for(var j=0;j<target;j++){
+                try{ if(Lampa.Plugins&&Lampa.Plugins.remove){Lampa.Plugins.remove(purl(g[j+1])||keepUrl); removed++; changed=true;} }catch(e){}
+            }
+            if(!has(keepUrl)){
+                try{
+                    var obj={};Object.keys(keep||{}).forEach(function(x){obj[x]=keep[x];});
+                    obj.url=keepUrl; if(typeof obj.status==='undefined')obj.status=1;
+                    Lampa.Plugins.add(obj); changed=true;
+                }catch(e2){ add(keepUrl,{name:(keep&&keep.name)||'Y7 plugin'}); }
+            }
+        });
+        // Clean duplicate helper lists too, so Y7 does not recreate them later.
+        try{
+            var ex=extraPlugins(),seenEx={},cleanEx=[];
+            ex.forEach(function(ep){var k=dupNorm(ep&&ep.url);if(!k||seenEx[k])return;seenEx[k]=1;cleanEx.push(ep);});
+            if(cleanEx.length!==ex.length){saveExtraPlugins(cleanEx);changed=true;}
+        }catch(e3){}
+        try{
+            var ml=Lampa.Storage.get(MANAGED_KEY,[])||[],seenM={},cleanM=[];
+            ml.forEach(function(u){var k=dupNorm(u);if(!k||seenM[k])return;seenM[k]=1;cleanM.push(u);});
+            if(cleanM.length!==ml.length){Lampa.Storage.set(MANAGED_KEY,cleanM);changed=true;}
+        }catch(e4){}
+        if(changed){save();needRestart(true);}
+        var after=registry();var actual=Math.max(0,beforeCount-after.length);
+        if(!quiet)notify(actual>0?('✓ Видалено дублів: '+actual+'. Перезапусти Lampa.'):'✓ Дублів з однаковою адресою не знайдено.');
+        return actual;
     }
 
     function bool(v) {
@@ -1708,6 +1754,7 @@ module.exports = QRCode;
     }
 
     function reconcile(loadNow) {
+        cleanupPluginDuplicates(true);
         enforceKidsRestrictions();
         var added=[], changed=false, wanted={}, old=[];
         PLUGINS.forEach(function(p){ wanted[norm(p.url)] = enabled(p); });
@@ -2051,14 +2098,37 @@ module.exports = QRCode;
         setTimeout(poll, 700);
     }
 
+    function showPairingConnectionHelp(err){
+        var reason=String(err&&err.error||'network'),st=Number(err&&err.status||0);
+        var statusUrl=baseUrl()+'/k2/status';
+        var pairUrl=baseUrl()+'/pair';
+        var box=$('<div style="padding:1em;text-align:left;line-height:1.5">'+
+            '<div style="font-size:1.15em;font-weight:800;color:#ffcf74;margin-bottom:.65em">Y7 Core не відповідає телевізору</div>'+
+            '<div>QR ще не формується, бо TV не отримав сесію спарювання від сервера.</div>'+
+            '<div style="margin-top:.8em"><b>Причина:</b> '+reason+(st?' · HTTP '+st:'')+'</div>'+
+            '<div style="margin-top:.8em"><b>Перевір з телефона:</b><br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+statusUrl+'</span></div>'+
+            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.6</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
+            '<div style="margin-top:.8em;opacity:.82">Якщо адреса не відкривається — на сервері перевір Funnel: він має вести HTTPS на <b>127.0.0.1:9120</b>, не на 9118.</div>'+
+            '</div>');
+        openQrModal('Y7 — діагностика підключення',box,null,60);
+    }
+
     function startPairing() {
         var base = baseUrl();
         notify('Створюю код спарювання…');
-        ajax('POST', base + '/pair/start', {device_name:pairingDeviceName()}, function(r) {
-            if (!r.ok || !r.pair_id) return notify('Y7: сервер не створив сесію');
+        // 4.13.2 path was the last configuration confirmed working on this TV.
+        // Keep POST as the primary path and plain GET only as a compatibility fallback.
+        ajax('POST', base + '/pair/start', {device_name:pairingDeviceName()}, function(r){
+            if (!r.ok || !r.pair_id) return showPairingConnectionHelp(r||{error:'invalid_response'});
             showPairModal(r);
-        }, function(r) {
-            notify('Y7 Core недоступний або спарювання заблоковане. Перевір порт 9120 і сервер.');
+        }, function(firstErr){
+            var getUrl=base + '/pair/start?device_name=' + encodeURIComponent(pairingDeviceName()) + '&_=' + Date.now();
+            ajaxSimpleGet(getUrl, function(r){
+                if (!r.ok || !r.pair_id) return showPairingConnectionHelp(r||{error:'invalid_response'});
+                showPairModal(r);
+            }, function(secondErr){
+                showPairingConnectionHelp(secondErr||firstErr);
+            });
         });
     }
 
@@ -2317,12 +2387,12 @@ module.exports = QRCode;
             REMOTE_GUEST_UNTIL=Date.now()+((r.expires_in||43200)*1000);
             ensureGuestRemotePoll();
             var hours=Math.max(1,Math.ceil((r.expires_in||43200)/3600));
-            var shortLink=String(r.short_url||r.url), shortCode=String(r.code||'');
-            var box=$('<div style="padding:1em;text-align:center"><div class="y7-remote-qr" style="width:248px;height:248px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div style="font-size:1.05em;font-weight:700">Y7 TV Manager · '+hours+' год</div><div style="margin-top:.55em">Відскануй QR або набери цю адресу на телефоні:</div><div class="y7-manual-link" style="font-size:1em;font-weight:750;color:#a9d2ff;overflow-wrap:anywhere;padding:10px 4px;user-select:text">'+shortLink+'</div><div style="opacity:.7;font-size:.86em">Доступ тільки до цього TV. Не передавай адресу стороннім.</div></div>');
+            var managerUrl=String(r.url||'');
+            var box=$('<div style="padding:1em;text-align:center"><div class="y7-remote-qr" style="width:248px;height:248px;margin:0 auto 1em;background:#fff;padding:8px;box-sizing:content-box"></div><div style="font-size:1.05em;font-weight:700">Y7 TV Manager · '+hours+' год</div><div style="margin-top:.55em">Скануй QR телефоном. Повне налаштування Y7 цього TV.</div><div class="y7-manual-link" style="opacity:.75;font-size:.82em;margin-top:1em;overflow-wrap:anywhere;user-select:text">'+managerUrl+'</div></div>');
             openQrModal('Y7 TV Manager',box,null,45);
             loadQrLib(function(ok){
-                if(ok){try{new Y7QRCode(box.find('.y7-remote-qr')[0],{text:shortLink,width:248,height:248,correctLevel:Y7QRCode.CorrectLevel.M});return;}catch(e){}}
-                try{box.find('.y7-remote-qr').html('<div style="color:#111;padding:22px 8px;font-size:14px;line-height:1.35">QR недоступний.<br><br>Відкрий коротку адресу під ним.</div>');}catch(e2){}
+                if(ok){try{new Y7QRCode(box.find('.y7-remote-qr')[0],{text:managerUrl,width:248,height:248,correctLevel:Y7QRCode.CorrectLevel.M});return;}catch(e){}}
+                try{box.find('.y7-remote-qr').html('<div style="color:#111;padding:22px 8px;font-size:14px;line-height:1.35">QR недоступний.<br><br>Відкрий адресу нижче телефоном.</div>');}catch(e2){}
             });
         }
         function failed(err){
@@ -3419,6 +3489,16 @@ function remotePlatformCaps() {
 
         addParam({
             component:COMPONENT,
+            param:{name:'k2pm_remove_duplicate_plugins',type:'trigger',default:false},
+            field:{name:'Видалити дублікати плагінів',description:'Залишає по одному запису для кожної однакової адреси плагіна. Імена не важливі — порівнюється саме URL.'},
+            onChange:function(){
+                try{Lampa.Storage.set('k2pm_remove_duplicate_plugins',false);}catch(e){}
+                cleanupPluginDuplicates(false);
+            }
+        });
+
+        addParam({
+            component:COMPONENT,
             param:{name:HEALTH_AUTO_KEY,type:'trigger',default:true},
             field:{name:'Автоперевірка плагінів',description:'Оновлювати статуси автоматично приблизно раз на 6 годин.'}
         });
@@ -3716,4 +3796,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.4');
+})('4.13.6');
