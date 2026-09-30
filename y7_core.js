@@ -1,7 +1,7 @@
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.12.0
+ * Version: 4.13.0
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.12.0';
+    var VERSION = '4.13.0';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -592,124 +592,77 @@
         var closed = false;
         var keyHandler = null;
         var swallowHandler = null;
-        var blocker = null;
+        var overlay = null;
         var guardUntil = 0;
         var autoTimer = null;
+        var left = 10;
 
         try {
             var active = Lampa.Controller && Lampa.Controller.enabled ? Lampa.Controller.enabled() : null;
             prev = active && active.name ? active.name : '';
         } catch (e) {}
 
-        function cleanupController() {
-            try { document.removeEventListener('keydown', keyHandler, true); } catch (e) {}
-            try { document.removeEventListener('keyup', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('keypress', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('mousedown', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('mouseup', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('click', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('touchstart', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('touchend', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('pointerdown', swallowHandler, true); } catch (e) {}
-            try { document.removeEventListener('pointerup', swallowHandler, true); } catch (e) {}
-            try { if (blocker && blocker.parentNode) blocker.parentNode.removeChild(blocker); } catch (e) {}
-            try { if (Lampa.Controller && Lampa.Controller.remove) Lampa.Controller.remove(ctrl); } catch (e2) {}
-            try { if (prev && Lampa.Controller && Lampa.Controller.toggle) Lampa.Controller.toggle(prev); } catch (e3) {}
-        }
-
-        function close() {
-            if (closed) return;
-            closed = true;
-            // Keep the capture guards alive briefly after the modal disappears.
-            // LG often sends Back/OK as keydown + keyup; without this, keyup reaches
-            // the screen underneath and can open Lampa's application-exit dialog.
-            guardUntil = Date.now() + 650;
-            try { Lampa.Modal.close(); } catch (e) {}
-            try { if (autoTimer) clearInterval(autoTimer); } catch (eA) {}
-            try { if (afterClose) afterClose(); } catch (e2) {}
-            setTimeout(cleanupController, 700);
-        }
-
-        // A real selector/button makes the QR window closable by OK even on builds
-        // where Lampa.Modal does not forward onBack correctly.
-        try {
-            var timerText = $('<div class="y7-qr-timer" style="margin-top:.7em;opacity:.78;font-size:.95em">Автозакриття через 10 с</div>');
-            box.append(timerText);
-            var left = 10;
-            autoTimer = setInterval(function(){ if(closed)return; left -= 1; try{ timerText.text('Автозакриття через ' + left + ' с'); }catch(e0){} if(left <= 0) close(); },1000);
-            var closeBtn = $('<div class="selector y7-qr-close" style="display:inline-block;margin-top:1em;padding:.58em 1.1em;border-radius:.55em;background:rgba(255,255,255,.13);font-weight:700">Закрити · OK / Назад</div>');
-            closeBtn.on('hover:enter click', close);
-            box.append(closeBtn);
-        } catch (e) {}
-
-        try {
-            blocker = document.createElement('div');
-            blocker.className = 'y7-qr-blocker';
-            blocker.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(3,8,18,.34);pointer-events:auto;';
-            blocker.addEventListener('click', function(ev){ try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {} }, true);
-            (document.body || document.documentElement).appendChild(blocker);
-        } catch (e) {}
-
-        try {
-            Lampa.Modal.open({title:title,html:box,size:'medium',onBack:close});
-        } catch (e) {
-            try { Lampa.Modal.open({title:title,html:box,size:'medium'}); } catch (e2) {}
-        }
-
-        swallowHandler = function(ev){
+        function swallow(ev){
             if (closed && Date.now() > guardUntil) return;
-            var modal = box && box[0];
-            var t = ev && ev.target;
-            if (!closed && modal && t && modal.contains && modal.contains(t)) return;
-            try { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation && ev.stopImmediatePropagation(); } catch (e) {}
+            try { ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); } catch(e){}
+        }
+        function cleanup(){
+            try { if(autoTimer)clearInterval(autoTimer); } catch(e){}
+            try { document.removeEventListener('keydown',keyHandler,true); } catch(e){}
+            ['keyup','keypress','mousedown','mouseup','click','touchstart','touchend','pointerdown','pointerup'].forEach(function(n){try{document.removeEventListener(n,swallowHandler,true);}catch(e){}});
+            try { if(overlay && overlay.parentNode)overlay.parentNode.removeChild(overlay); } catch(e){}
+            try { if(Lampa.Controller&&Lampa.Controller.remove)Lampa.Controller.remove(ctrl); } catch(e){}
+            try { if(prev&&Lampa.Controller&&Lampa.Controller.toggle)Lampa.Controller.toggle(prev); } catch(e){}
+        }
+        function close(){
+            if(closed)return;
+            closed=true; guardUntil=Date.now()+900;
+            try { if(autoTimer)clearInterval(autoTimer); } catch(e){}
+            try { if(overlay)overlay.style.display='none'; } catch(e){}
+            try { if(afterClose)afterClose(); } catch(e){}
+            setTimeout(cleanup,950);
+        }
+
+        try{
+            overlay=document.createElement('div');
+            overlay.className='y7-qr-native-overlay';
+            overlay.style.cssText='position:fixed;inset:0;z-index:2147483646;background:rgba(3,8,18,.86);display:flex;align-items:center;justify-content:center;padding:4vh 4vw;box-sizing:border-box;pointer-events:auto;';
+            var card=document.createElement('div');
+            card.style.cssText='width:min(760px,92vw);max-height:90vh;overflow:auto;background:#101a2d;border:2px solid rgba(177,211,255,.35);border-radius:24px;padding:24px 28px;text-align:center;color:#fff;box-shadow:0 25px 80px rgba(0,0,0,.55);font-family:Arial,sans-serif;';
+            var ttl=document.createElement('div');ttl.textContent=title||'Y7';ttl.style.cssText='font-size:28px;font-weight:800;margin-bottom:14px';card.appendChild(ttl);
+            var holder=document.createElement('div');holder.className='y7-qr-holder';card.appendChild(holder);
+            try{
+                var node=box&&box[0]?box[0]:box;
+                if(node)holder.appendChild(node);
+            }catch(e){}
+            var timer=document.createElement('div');timer.className='y7-qr-timer';timer.textContent='Автозакриття через 10 с';timer.style.cssText='margin-top:14px;font-size:17px;color:#cfe1ff';card.appendChild(timer);
+            var btn=document.createElement('button');btn.className='selector y7-qr-close';btn.textContent='Закрити · OK / Назад';btn.style.cssText='margin-top:14px;padding:12px 22px;border:0;border-radius:12px;background:#426ef4;color:#fff;font-size:18px;font-weight:800;';btn.onclick=function(ev){swallow(ev);close();};card.appendChild(btn);
+            overlay.appendChild(card);
+            overlay.addEventListener('click',function(ev){ if(ev.target===overlay){swallow(ev);close();} },true);
+            (document.body||document.documentElement).appendChild(overlay);
+            autoTimer=setInterval(function(){ if(closed)return; left--; try{timer.textContent='Автозакриття через '+left+' с';}catch(e){} if(left<=0)close(); },1000);
+        }catch(e){ setTimeout(close,10000); }
+
+        swallowHandler=function(ev){ if(!closed&&overlay&&ev&&ev.target&&overlay.contains(ev.target))return; if(!closed || Date.now()<=guardUntil)swallow(ev); };
+        ['keyup','keypress','mousedown','mouseup','touchstart','touchend','pointerdown','pointerup'].forEach(function(n){try{document.addEventListener(n,swallowHandler,true);}catch(e){}});
+
+        keyHandler=function(ev){
+            if(closed && Date.now()>guardUntil)return;
+            var kc=ev&&(ev.keyCode||ev.which||0), key=String((ev&&(ev.key||ev.code))||''), lower=key.toLowerCase();
+            var isBack=kc===27||kc===461||kc===10009||kc===8||key==='Escape'||key==='Backspace'||key==='BrowserBack'||key==='GoBack';
+            var isOk=kc===13||key==='Enter'||lower==='ok'||lower==='select';
+            var isNav=kc===37||kc===38||kc===39||kc===40||key.indexOf('Arrow')===0;
+            if(isBack||isOk||isNav)swallow(ev);
+            if((isBack||isOk)&&!closed)close();
         };
-        try { document.addEventListener('keyup', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('keypress', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('mousedown', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('mouseup', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('click', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('touchstart', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('touchend', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('pointerdown', swallowHandler, true); } catch (e) {}
-        try { document.addEventListener('pointerup', swallowHandler, true); } catch (e) {}
+        try{document.addEventListener('keydown',keyHandler,true);}catch(e){}
 
-        // Explicit controller is needed on some LG webOS/Lampa builds.
-        try {
-            if (Lampa.Controller && Lampa.Controller.add) {
-                Lampa.Controller.add(ctrl, {
-                    toggle:function(){
-                        try {
-                            var btn = box.find('.y7-qr-close').first();
-                            if (btn && btn.length && Lampa.Controller.collectionSet) Lampa.Controller.collectionSet(box, box);
-                            if (btn && btn.length && Lampa.Controller.collectionFocus) Lampa.Controller.collectionFocus(btn[0], box);
-                        } catch (e) {}
-                    },
-                    enter:close,
-                    ok:close,
-                    back:close
-                });
-                setTimeout(function(){
-                    try { if (!closed) Lampa.Controller.toggle(ctrl); } catch (e) {}
-                }, 0);
+        try{
+            if(Lampa.Controller&&Lampa.Controller.add){
+                Lampa.Controller.add(ctrl,{toggle:function(){},enter:close,ok:close,back:close,left:function(){},right:function(){},up:function(){},down:function(){}});
+                setTimeout(function(){try{if(!closed)Lampa.Controller.toggle(ctrl);}catch(e){}},0);
             }
-        } catch (e) {}
-
-        // Last-resort hardware-key fallback: LG/webOS Back=461, Samsung Back=10009.
-        keyHandler = function(ev) {
-            if (closed && Date.now() > guardUntil) return;
-            var kc = ev && (ev.keyCode || ev.which || 0);
-            var key = String((ev && (ev.key || ev.code)) || '');
-            var lower = key.toLowerCase();
-            var isBack = kc===27 || kc===461 || kc===10009 || kc===8 || key==='Escape' || key==='Backspace' || key==='BrowserBack' || key==='GoBack';
-            var isOk = kc===13 || key==='Enter' || lower==='ok' || lower==='select';
-            var isNav = kc===37 || kc===38 || kc===39 || kc===40 || key.indexOf('Arrow')===0;
-            if (isBack || isOk || isNav) {
-                try { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation && ev.stopImmediatePropagation(); } catch (e) {}
-            }
-            if ((isBack || isOk) && !closed) { close(); return; }
-        };
-        try { document.addEventListener('keydown', keyHandler, true); } catch (e) {}
-
+        }catch(e){}
         return close;
     }
 
@@ -2424,4 +2377,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.12.0');
+})('4.13.0');
