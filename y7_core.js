@@ -1,7 +1,7 @@
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.10.0
+ * Version: 4.12.0
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.10.0';
+    var VERSION = '4.12.0';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -56,6 +56,7 @@
     var HEALTH_SUPPRESS_KEY = 'k2pm_health_suppressed';
     var TORR_LAST_KEY = 'k2pm_torr_last_ok';
     var KIDS_ADMIN_KEY = 'y7_kids_admin_config_v1';
+    var KIDS_PREFS_KEY = 'y7_kids_prefs_v1';
     var ADULT_CLEANUP_KEY = 'y7_adult_cleanup_v47';
     var HEAD_REMOTE_INSTALLED = false;
     var HEARTBEAT_TIMER = null;
@@ -484,16 +485,25 @@
         try{Lampa.Storage.set(KIDS_ADMIN_KEY,rewards);}catch(e){try{localStorage.setItem(KIDS_ADMIN_KEY,JSON.stringify(rewards));}catch(e2){}}
         try{window.dispatchEvent(new CustomEvent('y7:kids-config',{detail:rewards}));}catch(e3){}
     }
-
+    function kidsStorePrefs(prefs){
+        if(!prefs||typeof prefs!=='object')return;
+        try{Lampa.Storage.set(KIDS_PREFS_KEY,prefs);}catch(e){try{localStorage.setItem(KIDS_PREFS_KEY,JSON.stringify(prefs));}catch(e2){}}
+        try{window.dispatchEvent(new CustomEvent('y7:kids-prefs',{detail:prefs}));}catch(e3){}
+    }
     function kidsGetConfig(){
         try{return Lampa.Storage.get(KIDS_ADMIN_KEY,null)||null;}catch(e){}
         try{return JSON.parse(localStorage.getItem(KIDS_ADMIN_KEY)||'null');}catch(e2){return null;}
+    }
+    function kidsGetPrefs(){
+        try{return Lampa.Storage.get(KIDS_PREFS_KEY,null)||null;}catch(e){}
+        try{return JSON.parse(localStorage.getItem(KIDS_PREFS_KEY)||'null');}catch(e2){return null;}
     }
 
     function kidsRefreshContent(done){
         var t=clientToken();if(!t){if(done)done(null);return;}
         ajax('GET',k2Api('/k2/kids/content?token='+encodeURIComponent(t)),null,function(r){
             if(r&&r.rewards)kidsStoreConfig(r.rewards);
+            if(r&&r.prefs)kidsStorePrefs(r.prefs);
             try{window.__Y7_KIDS_CONTENT__=r||{};window.dispatchEvent(new CustomEvent('y7:kids-content',{detail:r||{}}));}catch(e){}
             if(done)done(r||{});
         },function(){if(done)done(null);});
@@ -548,7 +558,8 @@
             getConfig:kidsGetConfig,
             refreshContent:kidsRefreshContent,
             reportProgress:kidsReportProgress,
-            openReward:kidsLaunchReward
+            openReward:kidsLaunchReward,
+            getPrefs:kidsGetPrefs
         };
         setTimeout(function(){kidsRefreshContent();},700);
     }
@@ -583,6 +594,7 @@
         var swallowHandler = null;
         var blocker = null;
         var guardUntil = 0;
+        var autoTimer = null;
 
         try {
             var active = Lampa.Controller && Lampa.Controller.enabled ? Lampa.Controller.enabled() : null;
@@ -613,6 +625,7 @@
             // the screen underneath and can open Lampa's application-exit dialog.
             guardUntil = Date.now() + 650;
             try { Lampa.Modal.close(); } catch (e) {}
+            try { if (autoTimer) clearInterval(autoTimer); } catch (eA) {}
             try { if (afterClose) afterClose(); } catch (e2) {}
             setTimeout(cleanupController, 700);
         }
@@ -620,6 +633,10 @@
         // A real selector/button makes the QR window closable by OK even on builds
         // where Lampa.Modal does not forward onBack correctly.
         try {
+            var timerText = $('<div class="y7-qr-timer" style="margin-top:.7em;opacity:.78;font-size:.95em">Автозакриття через 10 с</div>');
+            box.append(timerText);
+            var left = 10;
+            autoTimer = setInterval(function(){ if(closed)return; left -= 1; try{ timerText.text('Автозакриття через ' + left + ' с'); }catch(e0){} if(left <= 0) close(); },1000);
             var closeBtn = $('<div class="selector y7-qr-close" style="display:inline-block;margin-top:1em;padding:.58em 1.1em;border-radius:.55em;background:rgba(255,255,255,.13);font-weight:700">Закрити · OK / Назад</div>');
             closeBtn.on('hover:enter click', close);
             box.append(closeBtn);
@@ -628,7 +645,7 @@
         try {
             blocker = document.createElement('div');
             blocker.className = 'y7-qr-blocker';
-            blocker.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(3,8,18,.34);pointer-events:none;';
+            blocker.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(3,8,18,.34);pointer-events:auto;';
             blocker.addEventListener('click', function(ev){ try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {} }, true);
             (document.body || document.documentElement).appendChild(blocker);
         } catch (e) {}
@@ -1566,6 +1583,9 @@ function remotePlatformCaps() {
         else if(c.type==='update_channel')setStorage(UPDATE_CHANNEL_KEY,c.channel||'stable');
         else if(c.type==='extra_add'){if(addExtraPlugin(c.plugin||{}))notify('✓ Новий плагін додано з карантину');}
         else if(c.type==='kids_config'){kidsStoreConfig(c.rewards||{});}
+        else if(c.type==='kids_prefs'){kidsStorePrefs(c.prefs||{});}
+        else if(c.type==='kids_reset'){try{localStorage.setItem('y7_kids_reset_pending','1');window.dispatchEvent(new CustomEvent('y7:kids-reset'));notify('Прогрес Y7 Ігор скинуто');}catch(e){}}
+        else if(c.type==='kids_open'){try{if(window.Y7KidsArcade){if(c.mode==='aquarium'&&Y7KidsArcade.openAquarium)Y7KidsArcade.openAquarium();else if(Y7KidsArcade.open)Y7KidsArcade.open();}}catch(e){notify('Y7 Ігри ще не готові');}}
         else if(c.type==='kids_content_refresh'){kidsRefreshContent();}
         else if(c.type==='remote_key')remoteControllerAction(String(c.key||''));
         else if(c.type==='remote_text')remoteTextInput(c.text||'');
@@ -2404,4 +2424,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.10.0');
+})('4.12.0');
