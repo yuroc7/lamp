@@ -1,7 +1,7 @@
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.9.0
+ * Version: 4.10.0
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    var VERSION = '4.9.0';
+    var VERSION = '4.10.0';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -39,7 +39,7 @@
     var PROFILE_VERSION_KEY = 'k2pm_profile_version';
     var START_PAGE_KEY = 'k2pm_start_page';
     var IPTV_PRESET_KEY = 'k2pm_iptv_preset';
-    var PROFILE_VERSION = 400;
+    var PROFILE_VERSION = 410;
     var HEALTH_CACHE_KEY = 'k2pm_plugin_health_v1';
     var HEALTH_AUTO_KEY = 'k2pm_plugin_health_auto';
     var HEALTH_TTL = 6 * 60 * 60 * 1000;
@@ -300,17 +300,17 @@
 
     function secureOnlineUrl() {
         var t = clientToken();
-        return t ? baseUrl() + '/online/js/' + encodeURIComponent(t) + '?y7=480' : '';
+        return t ? baseUrl() + '/online/js/' + encodeURIComponent(t) + '?y7=4100' : '';
     }
 
     function secureSisiUrl() {
         var t = clientToken();
-        return t ? baseUrl() + '/sisi/js/' + encodeURIComponent(t) + '?y7=480' : '';
+        return t ? baseUrl() + '/sisi/js/' + encodeURIComponent(t) + '?y7=4100' : '';
     }
 
     function secureSyncUrl() {
         var t = clientToken();
-        return t ? baseUrl() + '/sync/js/' + encodeURIComponent(t) + '?y7=480' : '';
+        return t ? baseUrl() + '/sync/js/' + encodeURIComponent(t) + '?y7=4100' : '';
     }
 
     function k2Api(path) {
@@ -430,15 +430,16 @@
             }
         });
 
+        var suppressed=getStorage(HEALTH_SUPPRESS_KEY,{});
         PLUGINS.forEach(function(p) {
-            if (enabled(p)) {
+            if (enabled(p) && !suppressed[p.id]) {
                 if (add(p.url, p)) { changed=true; added.push(p.url); }
             } else if (remove(p.url)) {
                 changed=true; needRestart(true);
             }
         });
 
-        extraPlugins().forEach(function(ep){ if(ep.on!==false && add(ep.url,ep)){changed=true;added.push(ep.url);} });
+        extraPlugins().forEach(function(ep){ if(ep.on!==false && !suppressed[ep.id] && add(ep.url,ep)){changed=true;added.push(ep.url);} else if((ep.on===false||suppressed[ep.id]) && remove(ep.url)){changed=true;needRestart(true);} });
         if (syncSecureLampac(false)) changed=true;
         try { Lampa.Storage.set(MANAGED_KEY, managedList()); } catch (e) {}
         if (changed) save();
@@ -449,6 +450,7 @@
     function toggle(p,on) {
         setEnabled(p,on);
         if (on) {
+            var sup=getStorage(HEALTH_SUPPRESS_KEY,{}),fc=getStorage(HEALTH_FAIL_KEY,{});if(sup[p.id]){delete sup[p.id];setStorage(HEALTH_SUPPRESS_KEY,sup);}if(fc[p.id]){delete fc[p.id];setStorage(HEALTH_FAIL_KEY,fc);}
             if (add(p.url,p)) { save(); load([p.url]); notify('✓ '+p.name+' увімкнено'); }
             else notify('✓ '+p.name+' уже увімкнений');
         } else {
@@ -578,6 +580,9 @@
         var ctrl = 'y7_qr_modal_' + (++Y7_MODAL_SEQ);
         var closed = false;
         var keyHandler = null;
+        var swallowHandler = null;
+        var blocker = null;
+        var guardUntil = 0;
 
         try {
             var active = Lampa.Controller && Lampa.Controller.enabled ? Lampa.Controller.enabled() : null;
@@ -586,6 +591,16 @@
 
         function cleanupController() {
             try { document.removeEventListener('keydown', keyHandler, true); } catch (e) {}
+            try { document.removeEventListener('keyup', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('keypress', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('mousedown', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('mouseup', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('click', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('touchstart', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('touchend', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('pointerdown', swallowHandler, true); } catch (e) {}
+            try { document.removeEventListener('pointerup', swallowHandler, true); } catch (e) {}
+            try { if (blocker && blocker.parentNode) blocker.parentNode.removeChild(blocker); } catch (e) {}
             try { if (Lampa.Controller && Lampa.Controller.remove) Lampa.Controller.remove(ctrl); } catch (e2) {}
             try { if (prev && Lampa.Controller && Lampa.Controller.toggle) Lampa.Controller.toggle(prev); } catch (e3) {}
         }
@@ -593,9 +608,13 @@
         function close() {
             if (closed) return;
             closed = true;
-            cleanupController();
+            // Keep the capture guards alive briefly after the modal disappears.
+            // LG often sends Back/OK as keydown + keyup; without this, keyup reaches
+            // the screen underneath and can open Lampa's application-exit dialog.
+            guardUntil = Date.now() + 650;
             try { Lampa.Modal.close(); } catch (e) {}
             try { if (afterClose) afterClose(); } catch (e2) {}
+            setTimeout(cleanupController, 700);
         }
 
         // A real selector/button makes the QR window closable by OK even on builds
@@ -607,10 +626,35 @@
         } catch (e) {}
 
         try {
+            blocker = document.createElement('div');
+            blocker.className = 'y7-qr-blocker';
+            blocker.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(3,8,18,.34);pointer-events:none;';
+            blocker.addEventListener('click', function(ev){ try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {} }, true);
+            (document.body || document.documentElement).appendChild(blocker);
+        } catch (e) {}
+
+        try {
             Lampa.Modal.open({title:title,html:box,size:'medium',onBack:close});
         } catch (e) {
             try { Lampa.Modal.open({title:title,html:box,size:'medium'}); } catch (e2) {}
         }
+
+        swallowHandler = function(ev){
+            if (closed && Date.now() > guardUntil) return;
+            var modal = box && box[0];
+            var t = ev && ev.target;
+            if (!closed && modal && t && modal.contains && modal.contains(t)) return;
+            try { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation && ev.stopImmediatePropagation(); } catch (e) {}
+        };
+        try { document.addEventListener('keyup', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('keypress', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('mousedown', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('mouseup', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('click', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('touchstart', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('touchend', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('pointerdown', swallowHandler, true); } catch (e) {}
+        try { document.addEventListener('pointerup', swallowHandler, true); } catch (e) {}
 
         // Explicit controller is needed on some LG webOS/Lampa builds.
         try {
@@ -635,13 +679,17 @@
 
         // Last-resort hardware-key fallback: LG/webOS Back=461, Samsung Back=10009.
         keyHandler = function(ev) {
-            if (closed) return;
+            if (closed && Date.now() > guardUntil) return;
             var kc = ev && (ev.keyCode || ev.which || 0);
             var key = String((ev && (ev.key || ev.code)) || '');
-            if (kc===27 || kc===461 || kc===10009 || kc===8 || key==='Escape' || key==='Backspace' || key==='BrowserBack' || key==='GoBack') {
-                try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
-                close();
+            var lower = key.toLowerCase();
+            var isBack = kc===27 || kc===461 || kc===10009 || kc===8 || key==='Escape' || key==='Backspace' || key==='BrowserBack' || key==='GoBack';
+            var isOk = kc===13 || key==='Enter' || lower==='ok' || lower==='select';
+            var isNav = kc===37 || kc===38 || kc===39 || kc===40 || key.indexOf('Arrow')===0;
+            if (isBack || isOk || isNav) {
+                try { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation && ev.stopImmediatePropagation(); } catch (e) {}
             }
+            if ((isBack || isOk) && !closed) { close(); return; }
         };
         try { document.addEventListener('keydown', keyHandler, true); } catch (e) {}
 
@@ -860,11 +908,19 @@
         for (var i = 0; i < PLUGINS.length; i++) if (PLUGINS[i].id === id) return PLUGINS[i];
         return null;
     }
+    function extraPluginById(id) {
+        var a=extraPlugins();
+        for(var i=0;i<a.length;i++)if(a[i]&&a[i].id===id)return a[i];
+        return null;
+    }
 
     function applyV400Migration() {
         var version=parseInt(getStorage(PROFILE_VERSION_KEY,0),10)||0;
         if(version>=PROFILE_VERSION)return;
         ['tmdb_networks','random_scheduled','trash_filter'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,true);});
+        // 4.10 startup hygiene: these legacy endpoints currently return gateway/HTML errors.
+        // Keep them in the catalog for manual retry, but do not auto-load them on every launch.
+        ['bwa','modss','stream1'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,false);});
         if(getStorage(SYNC_ON_KEY,'__missing__')==='__missing__')setStorage(SYNC_ON_KEY,true);
         if(getStorage(QUALITY_MIN_KEY,'__missing__')==='__missing__')setStorage(QUALITY_MIN_KEY,720);
         if(getStorage(QUALITY_UA_KEY,'__missing__')==='__missing__')setStorage(QUALITY_UA_KEY,true);
@@ -1565,10 +1621,13 @@ function remotePlatformCaps() {
         if(!c||!c.results)return;
         var counts=getStorage(HEALTH_FAIL_KEY,{}),sup=getStorage(HEALTH_SUPPRESS_KEY,{}),changed=false;
         for(var i=0;i<c.results.length;i++){
-            var r=c.results[i],p=pluginById(r.id); if(!p)continue;
-            if(r.state==='dead')counts[r.id]=(counts[r.id]||0)+1;else counts[r.id]=0;
-            if(counts[r.id]>=4 && enabled(p)){if(!sup[r.id]){sup[r.id]=true;if(remove(p.url))changed=true;}}
-            if(r.state==='ok' && sup[r.id]){delete sup[r.id];if(enabled(p)&&add(p.url,p)){changed=true;load([p.url]);}}
+            var r=c.results[i],p=pluginById(r.id),ep=null,isExtra=false;
+            if(!p){ep=extraPluginById(r.id);p=ep;isExtra=!!ep;} if(!p)continue;
+            if(r.state==='dead')counts[r.id]=(counts[r.id]||0)+1;else if(r.state==='ok')counts[r.id]=0;
+            var hardDead=r.state==='dead'&&(r.message==='html_not_plugin'||r.message==='expired_token'||r.message==='not_found'||r.message==='server_error'||r.message==='content_error');
+            var active=isExtra?(p.on!==false):enabled(p);
+            if((hardDead||counts[r.id]>=2) && active){if(!sup[r.id]){sup[r.id]=true;if(remove(p.url))changed=true;needRestart(true);}}
+            if(r.state==='ok' && sup[r.id]){delete sup[r.id];if(active&&add(p.url,p)){changed=true;load([p.url]);}}
         }
         setStorage(HEALTH_FAIL_KEY,counts);setStorage(HEALTH_SUPPRESS_KEY,sup);if(changed)save();
     }
@@ -1577,6 +1636,9 @@ function remotePlatformCaps() {
         var list = [];
         PLUGINS.forEach(function(p) {
             list.push({id:p.id,name:p.name,url:p.url});
+        });
+        extraPlugins().forEach(function(p){
+            if(p&&p.url)list.push({id:p.id||('extra_'+norm(p.url)),name:p.name||'Extra plugin',url:p.url});
         });
 
         var t = clientToken();
@@ -1604,7 +1666,7 @@ function remotePlatformCaps() {
             return {cls:'warn',text:r.http ? ('⚠ HTTP '+r.http) : '⚠ відповідає'};
         }
         if (r.state === 'blocked') return {cls:'warn',text:'⚠ перевірку заблоковано'};
-        return {cls:'dead',text:r.http ? ('✕ HTTP '+r.http) : '✕ недоступний'};
+        return {cls:'dead',text:r.message==='html_not_plugin'?'✕ повертає HTML замість плагіна':(r.message==='expired_token'?'✕ токен/доступ протерміновано':(r.http ? ('✕ HTTP '+r.http) : '✕ недоступний'))};
     }
 
     function healthRow(body, dataName, result) {
@@ -2197,7 +2259,7 @@ function remotePlatformCaps() {
     function style() {
         if(document.getElementById('k2pm-css'))return;
         var s=document.createElement('style');s.id='k2pm-css';
-        s.innerHTML='.k2pm-head{padding:1em 1.1em;margin:.5em 0 1em;border-radius:.55em;background:rgba(255,255,255,.08);line-height:1.45}.k2pm-head b{font-size:1.15em}.k2pm-cat{padding:1.3em .55em .45em;opacity:.72;font-weight:700;font-size:1.02em}.k2pm-health{margin:.18em .8em .55em;opacity:.92;font-size:.82em;line-height:1.25}.k2pm-health-ok{color:#77d98c}.k2pm-health-warn{color:#f0c36b}.k2pm-health-dead{color:#ff7f7f}.k2pm-health-unknown{color:#9da3aa}.k2pm-health-summary{margin:.6em .8em 1em;padding:.65em .8em;border-radius:.45em;background:rgba(255,255,255,.055);font-size:.88em;line-height:1.35}.y7-head-remote__ico{width:1.5em;height:1.5em;display:grid;place-items:center;filter:drop-shadow(0 0 .22em rgba(101,175,255,.7))}.y7-head-remote__ico svg{width:100%;height:100%;display:block}.k2f-root{width:100%;height:100%;min-height:0;overflow:hidden;box-sizing:border-box}.k2f-root>.scroll{height:100%;max-height:100%;min-height:0;overflow:hidden}.k2f-root>.scroll>.scroll__content{height:100%;min-height:0;box-sizing:border-box}.k2f-body{padding:.7em 1.25em 2em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.62em .72em;box-sizing:border-box}.k2f-head{grid-column:1/-1;display:flex;align-items:center;gap:.7em;padding:.25em 0 .5em;border-bottom:1px solid rgba(255,255,255,.07)}.k2f-logo{display:grid;place-items:center;width:2.55em;height:2.55em;border-radius:.72em;background:linear-gradient(145deg,rgba(74,112,255,.98),rgba(91,62,230,.98));font-weight:900;font-size:.96em}.k2f-headtext{min-width:0;flex:1}.k2f-summary{margin-left:auto;opacity:.72;font-size:.72em;white-space:nowrap}.k2f-title{font-size:1.48em;font-weight:850}.k2f-sub{opacity:.72;margin-top:.14em;font-size:.86em;line-height:1.25}.k2f-section{grid-column:1/-1;display:flex;align-items:center;gap:.55em;margin-top:.7em;padding:.48em .1em .34em;font-weight:850;font-size:1.02em;opacity:.96;border-bottom:1px solid rgba(255,255,255,.09)}.k2f-icon{width:1.15em;height:1.15em;fill:currentColor;flex:0 0 auto}.k2f-row{display:flex;align-items:center;gap:.8em;min-height:4.75em;padding:.78em .9em;border-radius:.9em;background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.075);box-sizing:border-box;box-shadow:0 .45em 1.4em rgba(0,0,0,.12)}.k2f-row.focus{background:rgba(65,105,245,.92);border-color:rgba(255,255,255,.18)}.k2f-row-main{min-width:0;flex:1}.k2f-row-title{font-size:1.04em;font-weight:780;line-height:1.15}.k2f-row-desc{font-size:.78em;opacity:.68;margin-top:.24em;line-height:1.25;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.k2f-value{font-size:.82em;opacity:.9;white-space:nowrap;font-weight:700}.k2f-on .k2f-value{font-weight:800}@media(max-width:1100px){.k2f-body{grid-template-columns:1fr;padding:.7em 1em 2em}}@media(max-width:720px){.k2f-body{grid-template-columns:1fr;padding:.65em}.k2f-section,.k2f-head{grid-column:1}.k2f-row{min-height:4.35em}.k2f-row-title{font-size:1.08em}.k2f-row-desc{font-size:.82em}}';
+        s.innerHTML='.k2pm-head{padding:1em 1.1em;margin:.5em 0 1em;border-radius:.55em;background:rgba(255,255,255,.08);line-height:1.45}.k2pm-head b{font-size:1.15em}.k2pm-cat{padding:1.3em .55em .45em;opacity:.72;font-weight:700;font-size:1.02em}.k2pm-health{margin:.18em .8em .55em;opacity:.92;font-size:.82em;line-height:1.25}.k2pm-health-ok{color:#77d98c}.k2pm-health-warn{color:#f0c36b}.k2pm-health-dead{color:#ff7f7f}.k2pm-health-unknown{color:#9da3aa}.k2pm-health-summary{margin:.6em .8em 1em;padding:.65em .8em;border-radius:.45em;background:rgba(255,255,255,.055);font-size:.88em;line-height:1.35}.y7-head-remote__ico{width:1.5em;height:1.5em;display:grid;place-items:center;filter:drop-shadow(0 0 .22em rgba(101,175,255,.7))}.y7-head-remote__ico svg{width:100%;height:100%;display:block}.k2f-root{width:100%;height:100%;min-height:0;overflow:hidden;box-sizing:border-box}.k2f-root>.scroll{height:100%;max-height:100%;min-height:0;overflow:hidden}.k2f-root>.scroll>.scroll__content{height:100%;min-height:0;box-sizing:border-box}.k2f-body{padding:.7em 1.25em 2em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.62em .72em;box-sizing:border-box}.k2f-head{grid-column:1/-1;display:flex;align-items:center;gap:.7em;padding:.25em 0 .5em;border-bottom:1px solid rgba(255,255,255,.07)}.k2f-logo{display:grid;place-items:center;width:2.55em;height:2.55em;border-radius:.72em;background:linear-gradient(145deg,rgba(74,112,255,.98),rgba(91,62,230,.98));font-weight:900;font-size:.96em}.k2f-headtext{min-width:0;flex:1}.k2f-summary{margin-left:auto;opacity:.72;font-size:.72em;white-space:nowrap}.k2f-title{font-size:1.48em;font-weight:850}.k2f-sub{opacity:.72;margin-top:.14em;font-size:.86em;line-height:1.25}.k2f-section{grid-column:1/-1;display:flex;align-items:center;gap:.55em;margin-top:.7em;padding:.48em .1em .34em;font-weight:850;font-size:1.02em;opacity:.96;border-bottom:1px solid rgba(255,255,255,.09)}.k2f-icon{width:1.15em;height:1.15em;fill:currentColor;flex:0 0 auto}.k2f-row{display:flex;align-items:center;gap:.8em;min-height:5.15em;padding:.78em .9em;border-radius:.9em;background:rgba(18,31,58,.90);border:1px solid rgba(255,255,255,.075);box-sizing:border-box;box-shadow:0 .45em 1.4em rgba(0,0,0,.12)}.k2f-row.focus{background:rgba(65,105,245,.92);border-color:rgba(255,255,255,.18)}.k2f-row-main{min-width:0;flex:1}.k2f-row-title{font-size:1.04em;font-weight:780;line-height:1.15}.k2f-row-desc{font-size:.78em;opacity:.68;margin-top:.24em;line-height:1.25;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.k2f-value{font-size:.82em;opacity:.9;white-space:nowrap;font-weight:700}.k2f-on .k2f-value{font-weight:800}@media(max-width:1100px){.k2f-body{grid-template-columns:1fr;padding:.7em 1em 2em}}@media(max-width:720px){.k2f-body{grid-template-columns:1fr;padding:.65em}.k2f-section,.k2f-head{grid-column:1}.k2f-row{min-height:4.35em}.k2f-row-title{font-size:1.08em}.k2f-row-desc{font-size:.82em}}';
         (document.head||document.documentElement).appendChild(s);
     }
 
@@ -2292,10 +2354,12 @@ function remotePlatformCaps() {
         registerFullManager();
         setupSettings();
         listenSettings();
+        applyHealthSuppression(healthCache());
         var r=reconcile(true);
         if(!r.changed)needRestart(false);
         sendPolicy(true);
         heartbeat();
+        maybeAutoHealth();
         if(HEARTBEAT_TIMER)clearInterval(HEARTBEAT_TIMER);
         HEARTBEAT_TIMER=setInterval(heartbeat,30000);
         if(COMMAND_TIMER)clearInterval(COMMAND_TIMER);
@@ -2340,4 +2404,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.9.0');
+})('4.10.0');
