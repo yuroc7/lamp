@@ -1,6 +1,6 @@
 /*
  * Y7 Kids Arcade for Lampa / Y7 Media
- * Version: 4.7.0
+ * Version: 4.7.1
  *
  * 35 mini-games, multi-level progression, themed rooms and randomized tasks:
  *  - Зоряний забіг, Склади слово, Приклади, Порахуй друзів
@@ -15,10 +15,10 @@
 (function(){
     'use strict';
 
-    var VERSION='4.7.0';
-    var COMPONENT='y7_kids_arcade_470';
-    var SETTINGS_COMPONENT='y7_kids_arcade_settings_470';
-    var READY='__Y7_KIDS_ARCADE_470__';
+    var VERSION='4.7.1';
+    var COMPONENT='y7_kids_arcade_471';
+    var SETTINGS_COMPONENT='y7_kids_arcade_settings_471';
+    var READY='__Y7_KIDS_ARCADE_471__';
     var STORAGE='y7_kids_arcade_v4';
     if(window[READY]) return;
     window[READY]=true;
@@ -1028,7 +1028,7 @@
         var initialHeroes=allHeroes();
         var hubIndex=0,heroIndex=Math.max(0,initialHeroes.findIndex(function(h){return h.id===state.hero;}));
         var game=null;
-        var aquariumIndex=0,aquariumActors=[],aquariumPredator=false,predatorScore=0,predatorSize=1,predatorLives=3,predatorInv=0,contentRevSeen=-1,rewardOffer=null,rewardChoice=0;
+        var aquariumIndex=0,aquariumActors=[],aquariumObstacles=[],aquariumPredator=false,predatorScore=0,predatorSize=1,predatorLives=3,predatorInv=0,predatorObstacleInv=0,predatorFacing=1,contentRevSeen=-1,rewardOffer=null,rewardChoice=0;
         var raf=0,last=0,dead=false;
         var audio=null,voiceCache=[],voiceReady=false;
         var speakTimer=0;
@@ -2405,15 +2405,35 @@ function drawHeroes(){
             var cols=['#ffb35c','#62d8e8','#ff7eb6','#83dd77','#a889ff','#ffd761','#60b9ff','#ff876f','#b6e7ff','#9fd1ff','#7ce2aa','#e4b26f'];
             return {builtin:true,id:'built'+i,name:names[i],x:90+(i*103)%1110,y:155+(i%5)*92,vx:(i%2?1:-1)*(17+(i%5)*4),phase:i*.71,c:cols[i],depth:.88+(i%3)*.06,size:.78+(i%5)*.08,variant:i%4,feedUntil:0};
         }
+        function buildAquariumObstacles(){
+            aquariumObstacles=[
+                {type:'coral',x:185,y:560,r:45,c:'#ef6d8e',phase:.2},{type:'rock',x:385,y:505,r:52,c:'#65758a',phase:1.1},
+                {type:'coral',x:605,y:585,r:48,c:'#f08b62',phase:2.4},{type:'anemone',x:790,y:505,r:44,c:'#9b7ee8',phase:3.2},
+                {type:'rock',x:985,y:575,r:55,c:'#526b78',phase:4.1},{type:'coral',x:1120,y:440,r:40,c:'#ff8ab1',phase:5.0}
+            ];
+        }
         function rebuildAquarium(){
             var arr=fishItems();aquariumActors=[];for(var i=0;i<12;i++)aquariumActors.push(builtinFish(i));
             for(var j=0;j<arr.length;j++){var a=arr[j],h=hashText(a.id);aquariumActors.push({item:a,id:a.id,name:a.name||'Рибка',x:100+(h%1060),y:150+((h>>>6)%430),vx:((h&1)?1:-1)*(18+((h>>>4)%22)),phase:(h%628)/100,depth:.96,size:.94,feedUntil:0});}
-            if(aquariumIndex>=aquariumActors.length)aquariumIndex=0;
+            buildAquariumObstacles();if(aquariumIndex>=aquariumActors.length)aquariumIndex=0;
         }
-        function predatorStart(){if(!aquariumActors.length)rebuildAquarium();aquariumPredator=true;predatorScore=0;predatorSize=1;predatorLives=3;var ci=-1;for(var i=0;i<aquariumActors.length;i++)if(!aquariumActors[i].builtin){ci=i;break;}aquariumIndex=ci>=0?ci:0;var p=aquariumActors[aquariumIndex];p.x=640;p.y=355;p.yy=355;p.size=1;say('Режим хижака. Керуй рибкою, їж менших і уникай більших.');}
-        function predatorStop(){aquariumPredator=false;predatorScore=0;predatorSize=1;predatorLives=3;say('Звичайний акваріум.');}
-        function predatorMove(dx,dy){if(!aquariumPredator)return;var p=aquariumActors[aquariumIndex];if(!p)return;p.x=clamp(p.x+dx*42,55,1225);p.y=clamp((p.yy||p.y)+dy*42,115,630);p.yy=p.y;predatorCollide(performance.now());}
-        function predatorCollide(now){if(!aquariumPredator||now<predatorInv)return;var p=aquariumActors[aquariumIndex];if(!p)return;for(var i=0;i<aquariumActors.length;i++){if(i===aquariumIndex)continue;var f=aquariumActors[i],d=dist(p.x,p.yy||p.y,f.x,f.yy||f.y),ps=predatorSize,fs=f.size||1;if(d<44*(ps+fs)){if(fs<=ps*1.04){predatorScore++;predatorSize=Math.min(1.85,predatorSize+.055);p.size=predatorSize;good();f.x=ri(70,1210);f.y=ri(150,610);f.yy=f.y;f.size=.68+Math.random()*.52;f.c=['#ffb35c','#62d8e8','#ff7eb6','#83dd77','#a889ff','#ffd761','#60b9ff'][ri(0,6)];if(predatorScore%4===0)say('Рибка росте! Уже '+predatorScore+' здобичі.');}else if(fs>ps*1.16){predatorLives--;predatorInv=now+1200;bad();p.x=640;p.y=355;p.yy=355;predatorSize=Math.max(.8,predatorSize-.08);p.size=predatorSize;say('Ця рибка більша. Обережно!');if(predatorLives<=0){state.aquarium=state.aquarium||{};state.aquarium.predator_best=Math.max(state.aquarium.predator_best||0,predatorScore);saveState(state);predatorLives=3;predatorScore=0;predatorSize=1;p.size=1;}}break;}}}
+        function predatorStart(){if(!aquariumActors.length)rebuildAquarium();aquariumPredator=true;predatorScore=0;predatorSize=1;predatorLives=3;predatorFacing=1;predatorInv=0;predatorObstacleInv=0;aquariumIndex=0;var p=aquariumActors[aquariumIndex];p.x=640;p.y=330;p.yy=330;p.size=1;say('Режим хижака. Ти граєш обраним героєм '+hero().ua+'. Їж менших риб і обминай корали.');}
+        function predatorStop(){aquariumPredator=false;predatorScore=0;predatorSize=1;predatorLives=3;predatorInv=0;predatorObstacleInv=0;rebuildAquarium();say('Звичайний акваріум.');}
+        function predatorObstacleAt(x,y,r){for(var i=0;i<aquariumObstacles.length;i++){var o=aquariumObstacles[i];if(dist(x,y,o.x,o.y)<r+o.r*.82)return o;}return null;}
+        function predatorSetPos(nx,ny){if(!aquariumPredator)return false;var p=aquariumActors[aquariumIndex];if(!p)return false;nx=clamp(nx,55,1225);ny=clamp(ny,115,625);var hit=predatorObstacleAt(nx,ny,31*predatorSize);if(hit){var now=performance.now();if(now>predatorObstacleInv){predatorObstacleInv=now+650;bad();say(hit.type==='rock'?'Камінь не можна їсти. Обпливи його.':'Корали не їдять. Обпливи перешкоду.');}return false;}if(nx!==p.x)predatorFacing=nx>p.x?1:-1;p.x=nx;p.y=ny;p.yy=ny;predatorCollide(performance.now());return true;}
+        function predatorMove(dx,dy){if(!aquariumPredator)return;var p=aquariumActors[aquariumIndex];if(!p)return;predatorSetPos(p.x+dx*42,(p.yy||p.y)+dy*42);}
+        function predatorCollide(now){if(!aquariumPredator||now<predatorInv)return;var p=aquariumActors[aquariumIndex];if(!p)return;for(var i=0;i<aquariumActors.length;i++){if(i===aquariumIndex)continue;var f=aquariumActors[i],d=dist(p.x,p.yy||p.y,f.x,f.yy||f.y),ps=predatorSize,fs=f.size||1;if(d<42*(ps+fs)){if(fs<=ps*1.04){predatorScore++;predatorSize=Math.min(1.9,predatorSize+.055);p.size=predatorSize;good();f.x=ri(70,1210);f.y=ri(150,590);f.yy=f.y;f.size=.68+Math.random()*.52;f.c=['#ffb35c','#62d8e8','#ff7eb6','#83dd77','#a889ff','#ffd761','#60b9ff'][ri(0,6)];if(predatorScore%4===0)say(hero().ua+' росте! Уже '+predatorScore+' здобичі.');}else if(fs>ps*1.16){predatorLives--;predatorInv=now+1200;bad();p.x=640;p.y=330;p.yy=330;predatorSize=Math.max(.8,predatorSize-.08);p.size=predatorSize;say('Ця рибка більша. Обережно!');if(predatorLives<=0){state.aquarium=state.aquarium||{};state.aquarium.predator_best=Math.max(state.aquarium.predator_best||0,predatorScore);saveState(state);predatorLives=3;predatorScore=0;predatorSize=1;p.size=1;say('Спробуй ще раз. '+hero().ua+' знову маленький хижак.');}}break;}}}
+        function drawPredatorPlayer(p,now){
+            var s=86*predatorSize;ctx.save();ctx.translate(p.x,p.yy||p.y);ctx.scale(predatorFacing,1);drawHero(hero(),0,0,s,true);
+            // White triangular teeth make the selected hero visibly become the predator.
+            ctx.fillStyle='#fff';ctx.strokeStyle='rgba(40,54,70,.45)';ctx.lineWidth=1.2;for(var i=0;i<5;i++){var tx=18+i*9;ctx.beginPath();ctx.moveTo(tx,-2);ctx.lineTo(tx+7,-2);ctx.lineTo(tx+3.5,9);ctx.closePath();ctx.fill();ctx.stroke();}
+            ctx.strokeStyle='rgba(255,255,255,.82)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(40,0,29,-.55,.62);ctx.stroke();ctx.restore();
+        }
+        function drawAquariumObstacle(o,now){
+            ctx.save();ctx.translate(o.x,o.y);if(o.type==='rock'){var gr=ctx.createLinearGradient(-40,-35,45,35);gr.addColorStop(0,'#8494a2');gr.addColorStop(1,'#3f5361');ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(0,8,o.r,o.r*.62,-.08,0,Math.PI*2);ctx.fill();ctx.globalAlpha=.28;ctx.fillStyle='#dce7ee';ctx.beginPath();ctx.ellipse(-12,-6,o.r*.48,o.r*.16,-.15,0,Math.PI*2);ctx.fill();}
+            else if(o.type==='anemone'){for(var a=0;a<9;a++){ctx.save();ctx.rotate((a-4)*.19+Math.sin(now/800+o.phase+a)*.05);ctx.strokeStyle=a%2?'#b69aff':'#d29bff';ctx.lineWidth=8;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,24);ctx.quadraticCurveTo((a-4)*3,-8,(a-4)*6,-o.r);ctx.stroke();ctx.restore();}ctx.fillStyle='#7155ad';ctx.beginPath();ctx.ellipse(0,26,o.r*.65,o.r*.25,0,0,Math.PI*2);ctx.fill();}
+            else{ctx.strokeStyle=o.c;ctx.lineWidth=10;ctx.lineCap='round';for(var c=0;c<6;c++){var x=(c-2.5)*10;ctx.beginPath();ctx.moveTo(x,30);ctx.quadraticCurveTo(x+Math.sin(now/850+o.phase+c)*8,-2,x+(c%2?14:-12),-o.r+(c%3)*11);ctx.stroke();}ctx.fillStyle='#b85b69';ctx.beginPath();ctx.ellipse(0,31,o.r*.62,13,0,0,Math.PI*2);ctx.fill();}ctx.restore();
+        }
         function aquariumUpdate(dt,now){
             if(screen!=='aquarium')return;
             for(var i=0;i<aquariumActors.length;i++){var f=aquariumActors[i],d=f.depth||1,spd=(state&&state.aquarium_fish_speed)?state.aquarium_fish_speed:1;if(aquariumPredator&&i===aquariumIndex){f.yy=f.y;continue;}f.x+=f.vx*dt*d*spd;if(f.x<55){f.x=55;f.vx=Math.abs(f.vx);}if(f.x>1225){f.x=1225;f.vx=-Math.abs(f.vx);}f.yy=f.y+Math.sin(now/(680+70*i)+f.phase)*15*d+Math.sin(now/1700+f.phase*2)*7;}if(aquariumPredator)predatorCollide(now);
@@ -2448,16 +2468,18 @@ function drawHeroes(){
             for(var kp=0;kp<12;kp++){var kx=35+kp*112,kh=55+(kp%4)*20;ctx.save();ctx.translate(kx,667);ctx.rotate(Math.sin(now/900+kp)*.06);ctx.strokeStyle=kp%2?'#3fae80':'#2e947b';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(-15,-kh*.55,5,-kh);ctx.stroke();ctx.restore();}
             var sand=ctx.createLinearGradient(0,647,0,720);sand.addColorStop(0,night?'#867454':'#d8bc78');sand.addColorStop(1,night?'#554a3a':'#92764c');ctx.fillStyle=sand;ctx.fillRect(0,662,1280,58);
             ctx.globalAlpha=.24;for(var si=0;si<36;si++){ctx.fillStyle=si%3?'#fff':'#745b42';ctx.beginPath();ctx.arc((si*71)%1280,678+(si%4)*9,2+(si%5),0,7);ctx.fill();}ctx.globalAlpha=1;
+            // Solid coral/rock obstacles are visible and block the predator, but are never edible.
+            for(var oi=0;oi<aquariumObstacles.length;oi++)drawAquariumObstacle(aquariumObstacles[oi],now);
             // sort by depth so closer fish paint last
             var sorted=aquariumActors.map(function(f,i){return {f:f,i:i};}).sort(function(a,b){return (a.f.depth||1)-(b.f.depth||1);});
-            for(var q=0;q<sorted.length;q++){var f=sorted[q].f,i=sorted[q].i;fishGlow(f.x,f.yy||f.y,90*(f.depth||1),'rgba(80,210,235,.055)');if(f.builtin)drawBuiltinFish(f,i===aquariumIndex,now);else drawCustomFish(f,i===aquariumIndex,now);if(!aquariumScreensaver)addHit(f.x-82,(f.yy||f.y)-62,164,124,'fish',i);if((f.feedUntil||0)>now)vIcon('heart',f.x,(f.yy||f.y)-78,12,'#ff8fba');}
+            for(var q=0;q<sorted.length;q++){var f=sorted[q].f,i=sorted[q].i;if(aquariumPredator&&i===aquariumIndex){fishGlow(f.x,f.yy||f.y,100*predatorSize,'rgba(255,120,145,.10)');drawPredatorPlayer(f,now);continue;}fishGlow(f.x,f.yy||f.y,90*(f.depth||1),'rgba(80,210,235,.055)');if(f.builtin)drawBuiltinFish(f,!aquariumPredator&&i===aquariumIndex,now);else drawCustomFish(f,!aquariumPredator&&i===aquariumIndex,now);if(!aquariumScreensaver&&!aquariumPredator)addHit(f.x-82,(f.yy||f.y)-62,164,124,'fish',i);if((f.feedUntil||0)>now)vIcon('heart',f.x,(f.yy||f.y)-78,12,'#ff8fba');}
             if(aquariumScreensaver){
                 // screen saver chrome: almost nothing on top of the aquarium
                 ctx.save();var cg=ctx.createLinearGradient(0,0,0,120);cg.addColorStop(0,'rgba(0,0,0,.34)');cg.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=cg;ctx.fillRect(0,0,1280,130);ctx.restore();
                 var tm=new Date(),hh=('0'+tm.getHours()).slice(-2),mm=('0'+tm.getMinutes()).slice(-2);text(hh+':'+mm,1220,46,27,'rgba(255,255,255,.92)','right',750);text('Y7 · живий акваріум',42,46,17,'rgba(255,255,255,.78)','left',700);text('Натисни будь-яку кнопку, щоб повернутися',640,690,13,'rgba(255,255,255,.55)','center',600);
             }else{
-                text(aquariumPredator?'АКВАРІУМ · ХИЖАК':'МІЙ ЖИВИЙ АКВАРІУМ',44,46,29,'#fff','left',900);text(aquariumPredator?'Керуй своєю рибкою. Їж менших, уникай більших.':'12 базових рибок + усі твої · ↑ — режим хижака · OK — годувати',44,78,14,'#c8ecff','left',600);if(aquariumPredator)text('Здобич '+predatorScore+' · життя '+predatorLives+' · розмір '+Math.round(predatorSize*100)+'%',1235,50,14,'#b8f5d1','right',800);else text('Годувань '+((state.aquarium&&state.aquarium.feeds)||0),1235,50,16,'#b8f5d1','right',800);
-                rr(1025,86,205,48,14,aquariumPredator?'rgba(212,80,91,.82)':'rgba(37,91,133,.82)','rgba(255,255,255,.18)',2);text(aquariumPredator?'ВИЙТИ З ХИЖАКА':'РЕЖИМ ХИЖАКА',1127,110,13,'#fff','center',850);addHit(1025,86,205,48,'predator_toggle',0);text(aquariumPredator?'Стрілки / аеро-пульт — рух · Назад — вийти з хижака':'←/→ — рибка · ↑ — хижак · OK — годувати · Назад — до ігор',640,695,15,'#d6efff','center',650);
+                text(aquariumPredator?'АКВАРІУМ · ХИЖАК':'МІЙ ЖИВИЙ АКВАРІУМ',44,46,29,'#fff','left',900);text(aquariumPredator?'Грай обраним героєм. Їж менших риб, уникай більших і не врізайся в корали.':'12 базових рибок + усі твої · ↑ — режим хижака · OK — годувати',44,78,14,'#c8ecff','left',600);if(aquariumPredator)text('Здобич '+predatorScore+' · життя '+predatorLives+' · розмір '+Math.round(predatorSize*100)+'%',1235,50,14,'#b8f5d1','right',800);else text('Годувань '+((state.aquarium&&state.aquarium.feeds)||0),1235,50,16,'#b8f5d1','right',800);
+                rr(1025,86,205,48,14,aquariumPredator?'rgba(212,80,91,.82)':'rgba(37,91,133,.82)','rgba(255,255,255,.18)',2);text(aquariumPredator?'ВИЙТИ З ХИЖАКА':'РЕЖИМ ХИЖАКА',1127,110,13,'#fff','center',850);addHit(1025,86,205,48,'predator_toggle',0);text(aquariumPredator?'Стрілки / аеро-пульт — рух · корали/каміння не їсти · Назад — вийти':'←/→ — рибка · ↑ — хижак · OK — годувати · Назад — до ігор',640,695,15,'#d6efff','center',650);
             }
         }
         var galleryIndex=0;
@@ -2642,7 +2664,7 @@ function drawHeroes(){
         }
 
         function pointerMove(ev){
-            if(!state.pointer)return;if(aquariumScreensaver&&screen==='aquarium'){aquariumScreensaver=false;try{Lampa.Activity.backward();}catch(e){}return;}pointerInside=true;var p=canvasPoint(ev),z=hitAt(p.x,p.y);if(screen==='game'&&game&&game.kind==='dash'&&!game.over&&p.x>=28&&p.x<=1252&&p.y>=105&&p.y<=685){game.px=clamp(p.x,55,1225);game.py=clamp(p.y,120,665);dashHit(performance.now());return;}if(screen==='game'&&game&&game.kind==='catch'&&!game.over&&p.x>160&&p.x<1180&&p.y>130&&p.y<615){game.px=p.x;game.py=p.y;}if(screen==='aquarium'&&aquariumPredator&&p.x>45&&p.x<1235&&p.y>110&&p.y<640){var pf=aquariumActors[aquariumIndex];if(pf){pf.x=p.x;pf.y=p.y;pf.yy=p.y;predatorCollide(performance.now());}}if(!z)return;
+            if(!state.pointer)return;if(aquariumScreensaver&&screen==='aquarium'){aquariumScreensaver=false;try{Lampa.Activity.backward();}catch(e){}return;}pointerInside=true;var p=canvasPoint(ev),z=hitAt(p.x,p.y);if(screen==='game'&&game&&game.kind==='dash'&&!game.over&&p.x>=28&&p.x<=1252&&p.y>=105&&p.y<=685){game.px=clamp(p.x,55,1225);game.py=clamp(p.y,120,665);dashHit(performance.now());return;}if(screen==='game'&&game&&game.kind==='catch'&&!game.over&&p.x>160&&p.x<1180&&p.y>130&&p.y<615){game.px=p.x;game.py=p.y;}if(screen==='aquarium'&&aquariumPredator&&p.x>45&&p.x<1235&&p.y>110&&p.y<640){predatorSetPos(p.x,p.y);}if(!z)return;
             if(z.type==='reward_open')rewardOffer.selected=0;else if(z.type==='reward_later')rewardOffer.selected=1;
             else if(z.type==='hub')hubIndex=z.index;else if(z.type==='hero_top'){}else if(z.type==='change_hero'){}else if(z.type==='hero')heroIndex=z.index;else if(z.type==='fish')aquariumIndex=z.index;else if(z.type==='gallery')galleryIndex=z.index;else if(z.type==='reward_app')rewardChoice=z.index;else if(z.type==='settings'&&game)game.settingsIndex=z.index;else if((z.type==='quiz'||z.type==='memory'||z.type==='puzzle')&&game)game.selected=z.index;
         }
@@ -2758,14 +2780,14 @@ function drawHeroes(){
     function openArcade(){
         if(!ensureGameComponent())return;
         try{
-            Lampa.Activity.push({url:'y7://games/4.7.0',title:'Y7 Ігри',component:COMPONENT,page:1});
+            Lampa.Activity.push({url:'y7://games/4.7.1',title:'Y7 Ігри',component:COMPONENT,page:1});
             setTimeout(function(){try{if(!document.querySelector('.y7a-root')&&Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Ігри не відкрились. Перезапусти Lampa один раз.');}catch(e){}},900);
         }catch(e){try{if(Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Ігри: '+String(e&&e.message||e));}catch(_e){}}
     }
 
     function openAquarium(screensaver){
         if(!ensureGameComponent())return;
-        try{window.__Y7_START_AQUARIUM__=true;window.__Y7_AQUARIUM_SCREENSAVER__=!!screensaver;Lampa.Activity.push({url:'y7://aquarium/4.7.0',title:'Y7 Акваріум',component:COMPONENT,page:1});}catch(e){try{if(Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Акваріум: '+String(e&&e.message||e));}catch(_e){}}
+        try{window.__Y7_START_AQUARIUM__=true;window.__Y7_AQUARIUM_SCREENSAVER__=!!screensaver;Lampa.Activity.push({url:'y7://aquarium/4.7.1',title:'Y7 Акваріум',component:COMPONENT,page:1});}catch(e){try{if(Lampa.Noty&&Lampa.Noty.show)Lampa.Noty.show('Y7 Акваріум: '+String(e&&e.message||e));}catch(_e){}}
     }
 
     var Y7_IDLE_LAST=Date.now(),Y7_IDLE_TIMER=0,Y7_IDLE_MOVE=0;

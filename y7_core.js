@@ -1294,7 +1294,7 @@ module.exports = QRCode;
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.8
+ * Version: 4.13.10
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -1315,7 +1315,7 @@ module.exports = QRCode;
 (function () {
     'use strict';
 
-    var VERSION = '4.13.8';
+    var VERSION = '4.13.10';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -1360,10 +1360,12 @@ module.exports = QRCode;
     var REMOTE_MUTE_STATE = false;
     var REMOTE_LAST_ACTION = {name:'',at:0};
     var FULL_COMPONENT = 'k2_plugin_manager_full';
-    var QR_COMPONENT = 'y7_qr_screen_4138';
+    var QR_COMPONENT = 'y7_qr_screen_4139';
     var QR_COMPONENT_READY = false;
     var QR_SCREEN_SEQ = 0;
     var QR_SCREENS = {};
+    var PAIRING_KEY_KEY = 'y7_pairing_key_v1';
+    var PAIRING_FLOW = {generation:0,active:false,requesting:false,pairId:'',pollTimer:null,closeTimer:null,closeScreen:null};
     var FULL_OPENING = false;
     var healthBusy = false;
     var currentSettingsBody = null;
@@ -1957,6 +1959,34 @@ module.exports = QRCode;
         return name;
     }
 
+    function pairingKey() {
+        var key='';
+        try{key=String(Lampa.Storage.get(PAIRING_KEY_KEY)||'');}catch(e){}
+        if(key && key.length>=20)return key;
+        try{
+            var a=new Uint32Array(4);
+            if(window.crypto&&window.crypto.getRandomValues)window.crypto.getRandomValues(a);
+            key='tv-'+Array.prototype.map.call(a,function(x){return ('00000000'+x.toString(16)).slice(-8);}).join('');
+        }catch(e2){key='tv-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);}
+        try{Lampa.Storage.set(PAIRING_KEY_KEY,key);}catch(e3){}
+        return key;
+    }
+
+    function clearPairingTimers(){
+        try{if(PAIRING_FLOW.pollTimer)clearTimeout(PAIRING_FLOW.pollTimer);}catch(e){}
+        try{if(PAIRING_FLOW.closeTimer)clearTimeout(PAIRING_FLOW.closeTimer);}catch(e2){}
+        PAIRING_FLOW.pollTimer=null;PAIRING_FLOW.closeTimer=null;
+    }
+
+    function endPairingFlow(generation, closeScreen){
+        if(generation!=null && generation!==PAIRING_FLOW.generation)return;
+        var closer=PAIRING_FLOW.closeScreen;
+        clearPairingTimers();
+        PAIRING_FLOW.generation++;
+        PAIRING_FLOW.active=false;PAIRING_FLOW.requesting=false;PAIRING_FLOW.pairId='';PAIRING_FLOW.closeScreen=null;
+        if(closeScreen&&closer){try{closer();}catch(e){}}
+    }
+
     function registerQrScreen() {
         if(QR_COMPONENT_READY)return;
         QR_COMPONENT_READY=true;
@@ -1973,6 +2003,7 @@ module.exports = QRCode;
                 var closeBtn=$('<div class="selector y7qr-close">Закрити · OK / Назад</div>');
                 var left=Math.max(10,Math.min(180,Number(spec.seconds)||30));
                 var ticker=null,finished=false,closing=false;
+                var controllerName=QR_COMPONENT+'_'+id;
 
                 function finish(){
                     if(finished)return;finished=true;
@@ -1981,9 +2012,17 @@ module.exports = QRCode;
                     try{delete QR_SCREENS[id];}catch(e){}
                 }
                 function close(){
-                    if(closing)return;closing=true;
+                    if(closing)return;
+                    try{
+                        if(Lampa.Activity.active().activity!==self.activity){spec.pendingClose=true;return;}
+                    }catch(_activeErr){}
+                    closing=true;
                     try{Lampa.Activity.backward();}catch(e){finish();try{root.remove();}catch(_e){}}
                 }
+                function detachController(){
+                    try{if(Lampa.Controller&&Lampa.Controller.remove)Lampa.Controller.remove(controllerName);}catch(e){}
+                }
+                function stopTicker(){try{if(ticker)clearInterval(ticker);}catch(e){}ticker=null;}
                 spec.close=close;
 
                 this.create=function(){
@@ -2002,21 +2041,22 @@ module.exports = QRCode;
                 this.render=function(){return root;};
                 this.start=function(){
                     if(Lampa.Activity.active().activity!==this.activity)return;
-                    Lampa.Controller.add(QR_COMPONENT,{
+                    detachController();
+                    Lampa.Controller.add(controllerName,{
                         toggle:function(){try{Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(closeBtn[0],root);}catch(e){}},
                         enter:close,ok:close,back:close,
                         left:function(){},right:function(){},up:function(){},down:function(){}
                     });
-                    Lampa.Controller.toggle(QR_COMPONENT);
+                    Lampa.Controller.toggle(controllerName);
+                    stopTicker();
                     ticker=setInterval(function(){left--;timer.text('Автозакриття через '+left+' с');if(left<=0)close();},1000);
-                    if(spec.pendingClose)setTimeout(close,0);
+                    if(spec.pendingClose){spec.pendingClose=false;setTimeout(close,0);}
                 };
                 this.back=close;
-                this.pause=function(){};
-                this.stop=function(){};
+                this.pause=function(){detachController();stopTicker();};
+                this.stop=function(){detachController();stopTicker();};
                 this.destroy=function(){
-                    try{if(ticker)clearInterval(ticker);}catch(e){}
-                    try{if(Lampa.Controller&&Lampa.Controller.remove)Lampa.Controller.remove(QR_COMPONENT);}catch(e){}
+                    stopTicker();detachController();
                     finish();try{root.remove();}catch(e){}
                 };
             });
@@ -2042,10 +2082,14 @@ module.exports = QRCode;
         };
     }
 
-    function showPairModal(data) {
+    function showPairModal(data, generation) {
+        if(generation!==PAIRING_FLOW.generation)return;
         var stopped = false;
         var closeModal = null;
         var expireAt = Date.now() + ((data.expires_in || 300) * 1000);
+        PAIRING_FLOW.requesting=false;
+        PAIRING_FLOW.active=true;
+        PAIRING_FLOW.pairId=String(data.pair_id||'');
 
         var box = $(
             '<div style="padding:1em;text-align:center">' +
@@ -2058,15 +2102,21 @@ module.exports = QRCode;
         );
 
         function close() {
+            if(stopped)return;
             stopped = true;
+            clearPairingTimers();
             if (closeModal) closeModal();
-            else try { Lampa.Modal.close(); } catch (e) {}
+            else endPairingFlow(generation,false);
         }
 
-        closeModal = openQrModal('Y7 Media — безпечне підключення', box, function(){ stopped = true; },90);
+        closeModal = openQrModal('Y7 Media — безпечне підключення', box, function(){
+            stopped=true;
+            endPairingFlow(generation,false);
+        },90);
+        PAIRING_FLOW.closeScreen=closeModal;
 
         loadQrLib(function(ok) {
-            if (!ok || stopped) {
+            if (!ok || stopped || generation!==PAIRING_FLOW.generation) {
                 box.find('.k2-pair-qr').html('<div style="color:#111;padding-top:75px">QR недоступний<br>використай код нижче</div>');
                 return;
             }
@@ -2084,10 +2134,17 @@ module.exports = QRCode;
             }
         });
 
+        function schedulePoll(ms){
+            if(stopped||generation!==PAIRING_FLOW.generation)return;
+            try{if(PAIRING_FLOW.pollTimer)clearTimeout(PAIRING_FLOW.pollTimer);}catch(e){}
+            PAIRING_FLOW.pollTimer=setTimeout(poll,ms);
+        }
+
         function poll() {
-            if (stopped) return;
+            if (stopped || generation!==PAIRING_FLOW.generation) return;
             if (Date.now() > expireAt) {
                 box.find('.k2-pair-state').text('Код протерміновано. Закрий це вікно і створи новий.');
+                clearPairingTimers();
                 return;
             }
 
@@ -2095,7 +2152,9 @@ module.exports = QRCode;
                       '?poll=' + encodeURIComponent(data.poll_secret);
 
             ajax('GET', url, null, function(r) {
+                if(stopped||generation!==PAIRING_FLOW.generation)return;
                 if (r.status === 'approved' && r.client_token) {
+                    clearPairingTimers();
                     try {
                         Lampa.Storage.set(CLIENT_TOKEN_KEY, r.client_token);
                         Lampa.Storage.set(DEVICE_ID_KEY, r.device_id || '');
@@ -2109,17 +2168,21 @@ module.exports = QRCode;
 
                     box.find('.k2-pair-state').html('✓ <b>Підключено.</b> Lampac Online додано автоматично.');
                     notify('✓ Y7 Core підключено');
-                    setTimeout(close, 1800);
+                    PAIRING_FLOW.closeTimer=setTimeout(function(){if(generation===PAIRING_FLOW.generation)close();},1200);
                     return;
                 }
-
-                setTimeout(poll, 1500);
-            }, function(r) {
-                if (!stopped) setTimeout(poll, 2200);
+                if(r.status==='expired'||r.status==='consumed'){
+                    clearPairingTimers();
+                    box.find('.k2-pair-state').text('Сесію завершено. Закрий вікно та створи новий код.');
+                    return;
+                }
+                schedulePoll(1500);
+            }, function() {
+                schedulePoll(2200);
             });
         }
 
-        setTimeout(poll, 700);
+        schedulePoll(700);
     }
 
     function showPairingConnectionHelp(err){
@@ -2131,27 +2194,46 @@ module.exports = QRCode;
             '<div>QR ще не формується, бо TV не отримав сесію спарювання від сервера.</div>'+
             '<div style="margin-top:.8em"><b>Причина:</b> '+reason+(st?' · HTTP '+st:'')+'</div>'+
             '<div style="margin-top:.8em"><b>Перевір з телефона:</b><br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+statusUrl+'</span></div>'+
-            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.8</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
+            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.10</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
             '<div style="margin-top:.8em;opacity:.82">Якщо адреса не відкривається — на сервері перевір Funnel: він має вести HTTPS на <b>127.0.0.1:9120</b>, не на 9118.</div>'+
             '</div>');
         openQrModal('Y7 — діагностика підключення',box,null,60);
     }
 
     function startPairing() {
+        if(PAIRING_FLOW.active||PAIRING_FLOW.requesting){
+            notify(PAIRING_FLOW.pairId?'Код спарювання вже відкритий. Закрий його перед створенням нового.':'Код спарювання вже створюється…');
+            return;
+        }
+        clearPairingTimers();
+        var generation=++PAIRING_FLOW.generation;
+        PAIRING_FLOW.active=true;PAIRING_FLOW.requesting=true;PAIRING_FLOW.pairId='';PAIRING_FLOW.closeScreen=null;
         var base = baseUrl();
+        var pkey=pairingKey();
+        var dname=pairingDeviceName();
         notify('Створюю код спарювання…');
-        // 4.13.2 path was the last configuration confirmed working on this TV.
-        // Keep POST as the primary path and plain GET only as a compatibility fallback.
-        ajax('POST', base + '/pair/start', {device_name:pairingDeviceName()}, function(r){
-            if (!r.ok || !r.pair_id) return showPairingConnectionHelp(r||{error:'invalid_response'});
-            showPairModal(r);
+
+        function failCompletely(err){
+            if(generation!==PAIRING_FLOW.generation)return;
+            endPairingFlow(generation,false);
+            showPairingConnectionHelp(err||{error:'network'});
+        }
+        function accept(r){
+            if(generation!==PAIRING_FLOW.generation)return;
+            if(!r||!r.ok||!r.pair_id)return false;
+            showPairModal(r,generation);
+            return true;
+        }
+
+        ajax('POST', base + '/pair/start', {device_name:dname,pairing_key:pkey}, function(r){
+            if(!accept(r))failCompletely(r||{error:'invalid_response'});
         }, function(firstErr){
-            var getUrl=base + '/pair/start?device_name=' + encodeURIComponent(pairingDeviceName()) + '&_=' + Date.now();
+            if(generation!==PAIRING_FLOW.generation)return;
+            var getUrl=base + '/pair/start?device_name=' + encodeURIComponent(dname) + '&pairing_key=' + encodeURIComponent(pkey) + '&_=' + Date.now();
             ajaxSimpleGet(getUrl, function(r){
-                if (!r.ok || !r.pair_id) return showPairingConnectionHelp(r||{error:'invalid_response'});
-                showPairModal(r);
+                if(!accept(r))failCompletely(r||{error:'invalid_response'});
             }, function(secondErr){
-                showPairingConnectionHelp(secondErr||firstErr);
+                failCompletely(secondErr||firstErr);
             });
         });
     }
@@ -3822,4 +3904,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.8');
+})('4.13.10');
