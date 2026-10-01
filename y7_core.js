@@ -1294,7 +1294,7 @@ module.exports = QRCode;
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.6
+ * Version: 4.13.8
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -1315,7 +1315,7 @@ module.exports = QRCode;
 (function () {
     'use strict';
 
-    var VERSION = '4.13.6';
+    var VERSION = '4.13.8';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -1360,6 +1360,10 @@ module.exports = QRCode;
     var REMOTE_MUTE_STATE = false;
     var REMOTE_LAST_ACTION = {name:'',at:0};
     var FULL_COMPONENT = 'k2_plugin_manager_full';
+    var QR_COMPONENT = 'y7_qr_screen_4138';
+    var QR_COMPONENT_READY = false;
+    var QR_SCREEN_SEQ = 0;
+    var QR_SCREENS = {};
     var FULL_OPENING = false;
     var healthBusy = false;
     var currentSettingsBody = null;
@@ -1379,8 +1383,8 @@ module.exports = QRCode;
         world: {title:'Усі категорії — світ',fallback:'https://iptv-org.github.io/iptv/index.category.m3u'}
     };
 
-    if (window.__K2_PLUGIN_MANAGER_470__) return;
-    window.__K2_PLUGIN_MANAGER_470__ = true;
+    if (window.__K2_PLUGIN_MANAGER_480__) return;
+    window.__K2_PLUGIN_MANAGER_480__ = true;
 
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.dcma = false;
@@ -1494,18 +1498,25 @@ module.exports = QRCode;
         try { if (Lampa.Noty && Lampa.Noty.show) Lampa.Noty.show(s); } catch (e) {}
     }
 
+    function canonicalPluginHost(u) {
+        var s=String(u||'').trim();
+        // Lampa itself rewrites bwa.to -> bwa.ad in Storage during startup.
+        // Treat both hosts as the same plugin or Y7 would add a fresh bwa.to copy every boot.
+        s=s.replace(/:\/\/bwa\.to(?=\/|$)/i,'://bwa.ad');
+        return s;
+    }
+
     function norm(u) {
-        return String(u || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+        return canonicalPluginHost(u).replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
     }
 
     function dupNorm(u) {
-        // Duplicate cleanup is intentionally stricter than normal plugin-family matching:
-        // keep query/token variants separate and only collapse the same installed address.
-        return String(u || '').trim().replace(/\/+$/, '').toLowerCase();
+        // Keep token/query variants separate, but collapse addresses that Lampa normalizes itself.
+        return canonicalPluginHost(u).replace(/\/+$/, '').toLowerCase();
     }
 
     function cleanupPluginDuplicates(quiet) {
-        var before=registry(), beforeCount=before.length, groups={}, removed=0, changed=false;
+        var before=registry(), beforeCount=before.length, groups={}, changed=false, removed=0;
         for(var i=0;i<before.length;i++){
             var raw=purl(before[i]),k=dupNorm(raw);if(!k)continue;
             if(!groups[k])groups[k]=[];
@@ -1513,20 +1524,23 @@ module.exports = QRCode;
         }
         Object.keys(groups).forEach(function(k){
             var g=groups[k]; if(g.length<2)return;
-            var keep=g[0],keepUrl=purl(keep),target=g.length-1;
-            // Some Lampa builds remove one matching row, others remove all.
-            // Remove up to N-1 times, then restore one copy only if needed.
-            for(var j=0;j<target;j++){
-                try{ if(Lampa.Plugins&&Lampa.Plugins.remove){Lampa.Plugins.remove(purl(g[j+1])||keepUrl); removed++; changed=true;} }catch(e){}
-            }
-            if(!has(keepUrl)){
+            // Lampa.Plugins.remove expects the plugin OBJECT, not a URL string.
+            // Keep the first object and remove every later copy from the real runtime registry.
+            for(var j=g.length-1;j>=1;j--){
                 try{
-                    var obj={};Object.keys(keep||{}).forEach(function(x){obj[x]=keep[x];});
-                    obj.url=keepUrl; if(typeof obj.status==='undefined')obj.status=1;
-                    Lampa.Plugins.add(obj); changed=true;
-                }catch(e2){ add(keepUrl,{name:(keep&&keep.name)||'Y7 plugin'}); }
+                    if(Lampa.Plugins&&Lampa.Plugins.remove){Lampa.Plugins.remove(g[j]);removed++;changed=true;}
+                }catch(e){log('duplicate remove error',purl(g[j]),e);}
             }
         });
+        // Defensive storage pass: old builds may have left duplicates in Storage even if runtime was deduped.
+        try{
+            var stored=Lampa.Storage.get('plugins','[]')||[];
+            if(stored&&stored.push){
+                var seenS={},cleanS=[];
+                stored.forEach(function(it){var k=dupNorm(purl(it));if(k&&seenS[k]){changed=true;return;}if(k)seenS[k]=1;cleanS.push(it);});
+                if(cleanS.length!==stored.length)Lampa.Storage.set('plugins',cleanS);
+            }
+        }catch(es){}
         // Clean duplicate helper lists too, so Y7 does not recreate them later.
         try{
             var ex=extraPlugins(),seenEx={},cleanEx=[];
@@ -1539,7 +1553,7 @@ module.exports = QRCode;
             if(cleanM.length!==ml.length){Lampa.Storage.set(MANAGED_KEY,cleanM);changed=true;}
         }catch(e4){}
         if(changed){save();needRestart(true);}
-        var after=registry();var actual=Math.max(0,beforeCount-after.length);
+        var after=registry();var actual=Math.max(removed,Math.max(0,beforeCount-after.length));
         if(!quiet)notify(actual>0?('✓ Видалено дублів: '+actual+'. Перезапусти Lampa.'):'✓ Дублів з однаковою адресою не знайдено.');
         return actual;
     }
@@ -1593,9 +1607,16 @@ module.exports = QRCode;
     }
 
     function remove(url) {
-        if (!url || !has(url) || !Lampa.Plugins.remove) return false;
-        try { Lampa.Plugins.remove(url); return true; }
-        catch (e) { log('remove error', url, e); return false; }
+        if (!url || !Lampa.Plugins || !Lampa.Plugins.remove) return false;
+        var target=norm(url), a=registry(), removed=false;
+        // Lampa.Plugins.remove() takes the exact plugin object from its registry.
+        // Removing by URL string silently did nothing in previous Y7 builds.
+        for(var i=a.length-1;i>=0;i--){
+            if(norm(purl(a[i]))===target){
+                try{Lampa.Plugins.remove(a[i]);removed=true;}catch(e){log('remove error',url,e);}
+            }
+        }
+        return removed;
     }
 
     function save() {
@@ -1936,86 +1957,89 @@ module.exports = QRCode;
         return name;
     }
 
-    var Y7_MODAL_SEQ = 0;
+    function registerQrScreen() {
+        if(QR_COMPONENT_READY)return;
+        QR_COMPONENT_READY=true;
+        try{
+            Lampa.Component.add(QR_COMPONENT,function(object){
+                var self=this;
+                var id=String((object&&object.y7_qr_id)||'');
+                if(!id&&object&&object.url){var m=String(object.url).match(/y7:\/\/qr\/(\d+)/);if(m)id=m[1];}
+                var spec=QR_SCREENS[id]||{};
+                var root=$('<div class="y7qr-root"></div>');
+                var card=$('<div class="y7qr-card"></div>');
+                var holder=$('<div class="y7qr-holder"></div>');
+                var timer=$('<div class="y7qr-timer"></div>');
+                var closeBtn=$('<div class="selector y7qr-close">Закрити · OK / Назад</div>');
+                var left=Math.max(10,Math.min(180,Number(spec.seconds)||30));
+                var ticker=null,finished=false,closing=false;
+
+                function finish(){
+                    if(finished)return;finished=true;
+                    try{if(ticker)clearInterval(ticker);}catch(e){}
+                    try{if(spec.afterClose)spec.afterClose();}catch(e){}
+                    try{delete QR_SCREENS[id];}catch(e){}
+                }
+                function close(){
+                    if(closing)return;closing=true;
+                    try{Lampa.Activity.backward();}catch(e){finish();try{root.remove();}catch(_e){}}
+                }
+                spec.close=close;
+
+                this.create=function(){
+                    root.attr('style','position:relative;width:100%;height:100%;min-height:100vh;background:rgba(3,8,18,.96);display:flex;align-items:center;justify-content:center;padding:4vh 4vw;box-sizing:border-box;color:#fff;overflow:hidden;');
+                    card.attr('style','width:min(760px,92vw);max-height:90vh;overflow:auto;background:#101a2d;border:2px solid rgba(177,211,255,.35);border-radius:24px;padding:24px 28px;text-align:center;color:#fff;box-shadow:0 25px 80px rgba(0,0,0,.55);font-family:Arial,sans-serif;box-sizing:border-box;');
+                    card.append($('<div></div>').text(spec.title||'Y7').attr('style','font-size:28px;font-weight:800;margin-bottom:14px'));
+                    try{var node=spec.box&&spec.box[0]?spec.box[0]:spec.box;if(node)holder.append(node);}catch(e){}
+                    card.append(holder);
+                    timer.text('Автозакриття через '+left+' с').attr('style','margin-top:14px;font-size:17px;color:#cfe1ff');
+                    closeBtn.attr('style','display:inline-block;margin-top:14px;padding:12px 22px;border-radius:12px;background:#426ef4;color:#fff;font-size:18px;font-weight:800;');
+                    closeBtn.on('hover:enter click',function(){close();});
+                    card.append(timer).append(closeBtn);root.append(card);
+                    try{this.activity.loader(false);}catch(e){}
+                    return this.render();
+                };
+                this.render=function(){return root;};
+                this.start=function(){
+                    if(Lampa.Activity.active().activity!==this.activity)return;
+                    Lampa.Controller.add(QR_COMPONENT,{
+                        toggle:function(){try{Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(closeBtn[0],root);}catch(e){}},
+                        enter:close,ok:close,back:close,
+                        left:function(){},right:function(){},up:function(){},down:function(){}
+                    });
+                    Lampa.Controller.toggle(QR_COMPONENT);
+                    ticker=setInterval(function(){left--;timer.text('Автозакриття через '+left+' с');if(left<=0)close();},1000);
+                    if(spec.pendingClose)setTimeout(close,0);
+                };
+                this.back=close;
+                this.pause=function(){};
+                this.stop=function(){};
+                this.destroy=function(){
+                    try{if(ticker)clearInterval(ticker);}catch(e){}
+                    try{if(Lampa.Controller&&Lampa.Controller.remove)Lampa.Controller.remove(QR_COMPONENT);}catch(e){}
+                    finish();try{root.remove();}catch(e){}
+                };
+            });
+        }catch(e){QR_COMPONENT_READY=false;log('QR component register error',e);}
+    }
 
     function openQrModal(title, box, afterClose, seconds) {
-        var prev = '';
-        var ctrl = 'y7_qr_modal_' + (++Y7_MODAL_SEQ);
-        var closed = false;
-        var keyHandler = null;
-        var swallowHandler = null;
-        var overlay = null;
-        var guardUntil = 0;
-        var autoTimer = null;
-        var left = Math.max(10,Math.min(180,Number(seconds)||30));
-
-        try {
-            var active = Lampa.Controller && Lampa.Controller.enabled ? Lampa.Controller.enabled() : null;
-            prev = active && active.name ? active.name : '';
-        } catch (e) {}
-
-        function swallow(ev){
-            if (closed && Date.now() > guardUntil) return;
-            try { ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation)ev.stopImmediatePropagation(); } catch(e){}
-        }
-        function cleanup(){
-            try { if(autoTimer)clearInterval(autoTimer); } catch(e){}
-            try { document.removeEventListener('keydown',keyHandler,true); } catch(e){}
-            ['keyup','keypress','mousedown','mouseup','click','touchstart','touchend','pointerdown','pointerup'].forEach(function(n){try{document.removeEventListener(n,swallowHandler,true);}catch(e){}});
-            try { if(overlay && overlay.parentNode)overlay.parentNode.removeChild(overlay); } catch(e){}
-            try { if(Lampa.Controller&&Lampa.Controller.remove)Lampa.Controller.remove(ctrl); } catch(e){}
-            try { if(prev&&Lampa.Controller&&Lampa.Controller.toggle)Lampa.Controller.toggle(prev); } catch(e){}
-        }
-        function close(){
-            if(closed)return;
-            closed=true; guardUntil=Date.now()+900;
-            try { if(autoTimer)clearInterval(autoTimer); } catch(e){}
-            try { if(overlay)overlay.style.display='none'; } catch(e){}
-            try { if(afterClose)afterClose(); } catch(e){}
-            setTimeout(cleanup,950);
-        }
-
+        registerQrScreen();
+        var id=String(++QR_SCREEN_SEQ);
+        var spec={id:id,title:title||'Y7',box:box,afterClose:afterClose,seconds:seconds||30,close:null,pendingClose:false};
+        QR_SCREENS[id]=spec;
         try{
-            overlay=document.createElement('div');
-            overlay.className='y7-qr-native-overlay';
-            overlay.style.cssText='position:fixed;inset:0;z-index:2147483646;background:rgba(3,8,18,.86);display:flex;align-items:center;justify-content:center;padding:4vh 4vw;box-sizing:border-box;pointer-events:auto;';
-            var card=document.createElement('div');
-            card.style.cssText='width:min(760px,92vw);max-height:90vh;overflow:auto;background:#101a2d;border:2px solid rgba(177,211,255,.35);border-radius:24px;padding:24px 28px;text-align:center;color:#fff;box-shadow:0 25px 80px rgba(0,0,0,.55);font-family:Arial,sans-serif;';
-            var ttl=document.createElement('div');ttl.textContent=title||'Y7';ttl.style.cssText='font-size:28px;font-weight:800;margin-bottom:14px';card.appendChild(ttl);
-            var holder=document.createElement('div');holder.className='y7-qr-holder';card.appendChild(holder);
-            try{
-                var node=box&&box[0]?box[0]:box;
-                if(node)holder.appendChild(node);
-            }catch(e){}
-            var timer=document.createElement('div');timer.className='y7-qr-timer';timer.textContent='Автозакриття через '+left+' с';timer.style.cssText='margin-top:14px;font-size:17px;color:#cfe1ff';card.appendChild(timer);
-            var btn=document.createElement('button');btn.className='selector y7-qr-close';btn.textContent='Закрити · OK / Назад';btn.style.cssText='margin-top:14px;padding:12px 22px;border:0;border-radius:12px;background:#426ef4;color:#fff;font-size:18px;font-weight:800;';btn.onclick=function(ev){swallow(ev);close();};card.appendChild(btn);
-            overlay.appendChild(card);
-            overlay.addEventListener('click',function(ev){ if(ev.target===overlay){swallow(ev);close();} },true);
-            (document.body||document.documentElement).appendChild(overlay);
-            autoTimer=setInterval(function(){ if(closed)return; left--; try{timer.textContent='Автозакриття через '+left+' с';}catch(e){} if(left<=0)close(); },1000);
-        }catch(e){ setTimeout(close,left*1000); }
-
-        swallowHandler=function(ev){ if(!closed&&overlay&&ev&&ev.target&&overlay.contains(ev.target))return; if(!closed || Date.now()<=guardUntil)swallow(ev); };
-        ['keyup','keypress','mousedown','mouseup','touchstart','touchend','pointerdown','pointerup'].forEach(function(n){try{document.addEventListener(n,swallowHandler,true);}catch(e){}});
-
-        keyHandler=function(ev){
-            if(closed && Date.now()>guardUntil)return;
-            var kc=ev&&(ev.keyCode||ev.which||0), key=String((ev&&(ev.key||ev.code))||''), lower=key.toLowerCase();
-            var isBack=kc===27||kc===461||kc===10009||kc===8||key==='Escape'||key==='Backspace'||key==='BrowserBack'||key==='GoBack';
-            var isOk=kc===13||key==='Enter'||lower==='ok'||lower==='select';
-            var isNav=kc===37||kc===38||kc===39||kc===40||key.indexOf('Arrow')===0;
-            if(isBack||isOk||isNav)swallow(ev);
-            if((isBack||isOk)&&!closed)close();
+            Lampa.Activity.push({url:'y7://qr/'+id,title:title||'Y7',component:QR_COMPONENT,page:1,y7_qr_id:id});
+        }catch(e){
+            log('QR activity open error',e);
+            try{delete QR_SCREENS[id];}catch(_e){}
+            try{if(afterClose)afterClose();}catch(_e2){}
+            notify('Y7: не вдалося відкрити екран QR');
+        }
+        return function(){
+            if(spec.close)spec.close();
+            else spec.pendingClose=true;
         };
-        try{document.addEventListener('keydown',keyHandler,true);}catch(e){}
-
-        try{
-            if(Lampa.Controller&&Lampa.Controller.add){
-                Lampa.Controller.add(ctrl,{toggle:function(){},enter:close,ok:close,back:close,left:function(){},right:function(){},up:function(){},down:function(){}});
-                setTimeout(function(){try{if(!closed)Lampa.Controller.toggle(ctrl);}catch(e){}},0);
-            }
-        }catch(e){}
-        return close;
     }
 
     function showPairModal(data) {
@@ -2107,7 +2131,7 @@ module.exports = QRCode;
             '<div>QR ще не формується, бо TV не отримав сесію спарювання від сервера.</div>'+
             '<div style="margin-top:.8em"><b>Причина:</b> '+reason+(st?' · HTTP '+st:'')+'</div>'+
             '<div style="margin-top:.8em"><b>Перевір з телефона:</b><br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+statusUrl+'</span></div>'+
-            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.6</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
+            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.8</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
             '<div style="margin-top:.8em;opacity:.82">Якщо адреса не відкривається — на сервері перевір Funnel: він має вести HTTPS на <b>127.0.0.1:9120</b>, не на 9118.</div>'+
             '</div>');
         openQrModal('Y7 — діагностика підключення',box,null,60);
@@ -3381,6 +3405,7 @@ function remotePlatformCaps() {
                     selectRow('Стартова сторінка','Звичайна штатна стартова сторінка Lampa.',{'favorite@history':'Історія переглядів','main':'Головна','favorite@bookmarks':'Закладки','mytorrents':'Мої торренти','last':'Останній екран'},String(getStorage(START_PAGE_KEY,'favorite@history')),function(v){setStartPage(v,false);});
                     toggleRow('Y7 Sync','Спільні закладки та позиція перегляду між прив’язаними TV.',function(){return bool(getStorage(SYNC_ON_KEY,true));},function(v){setStorage(SYNC_ON_KEY,v);syncSecureLampac(true);needRestart(true);});
                     row('Перевірити всі плагіни','Оновити статус кожного джерела.','CHECK',function(){checkAllPlugins(true);});
+                    row('Видалити дублікати розширень','Залишити один запис для кожної однакової адреси у стандартних Розширеннях Lampa.','CLEAN',function(){cleanupPluginDuplicates(false);});
                     toggleRow('Автоперевірка плагінів','Health-кеш приблизно раз на 6 годин.',function(){return bool(getStorage(HEALTH_AUTO_KEY,true));},function(v){setStorage(HEALTH_AUTO_KEY,v);});
                     row('Створити backup','Налаштування, плагіни, IPTV, Kids і вигляд — без секретів.','RUN',function(){saveBackup(false);});
                     row('Відновити backup','Відновити останній backup Y7.','RUN',restoreBackup);
@@ -3490,7 +3515,7 @@ function remotePlatformCaps() {
         addParam({
             component:COMPONENT,
             param:{name:'k2pm_remove_duplicate_plugins',type:'trigger',default:false},
-            field:{name:'Видалити дублікати плагінів',description:'Залишає по одному запису для кожної однакової адреси плагіна. Імена не важливі — порівнюється саме URL.'},
+            field:{name:'Видалити дублікати плагінів',description:'Чистить реальний список Розширень Lampa: залишає один запис на однаковий URL і не дає BWA/Prestige дублюватися після перезапуску.'},
             onChange:function(){
                 try{Lampa.Storage.set('k2pm_remove_duplicate_plugins',false);}catch(e){}
                 cleanupPluginDuplicates(false);
@@ -3776,7 +3801,8 @@ function remotePlatformCaps() {
             open:openK2FullManager,
             remote:startGuestRemote,
             fixHeader:installY7HeadRemote,
-            cleanupAdult:cleanupAdultDuplicates
+            cleanupAdult:cleanupAdultDuplicates,
+            cleanupDuplicates:function(){return cleanupPluginDuplicates(false);}
         };
         window.Y7Media=window.K2PluginManager;
         log('ready',r);
@@ -3796,4 +3822,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.6');
+})('4.13.8');
