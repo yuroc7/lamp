@@ -1294,7 +1294,7 @@ module.exports = QRCode;
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.10
+ * Version: 4.13.11
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -1315,7 +1315,7 @@ module.exports = QRCode;
 (function () {
     'use strict';
 
-    var VERSION = '4.13.10';
+    var VERSION = '4.13.11';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -1332,7 +1332,7 @@ module.exports = QRCode;
     var PROFILE_VERSION_KEY = 'k2pm_profile_version';
     var START_PAGE_KEY = 'k2pm_start_page';
     var IPTV_PRESET_KEY = 'k2pm_iptv_preset';
-    var PROFILE_VERSION = 410;
+    var PROFILE_VERSION = 411;
     var HEALTH_CACHE_KEY = 'k2pm_plugin_health_v1';
     var HEALTH_AUTO_KEY = 'k2pm_plugin_health_auto';
     var HEALTH_TTL = 6 * 60 * 60 * 1000;
@@ -1402,17 +1402,17 @@ module.exports = QRCode;
     var PLUGINS = [
         // ONLINE — багато джерел одразу після встановлення Y7.
         {id:'online_mod',cat:'online',name:'Online MOD',desc:'Основне онлайн-джерело з власним вибором балансерів.',url:'https://nb557.github.io/plugins/online_mod.js',on:true},
-        {id:'cinema',cat:'online',name:'Cinema',desc:'Окремий community-плагін для фільмів/серіалів і навігації.',url:'https://bylampa.github.io/cinema.js',on:true},
+        {id:'cinema',cat:'online',name:'Cinema',desc:'Окремий community-плагін для фільмів/серіалів і навігації.',url:'https://bylampa.github.io/cinema.js',on:false},
         {id:'filmix',cat:'online',name:'Filmix',desc:'Окреме джерело Filmix.',url:'https://lampaplugins.github.io/store/fx.js',on:true},
-        {id:'prestige',cat:'online',name:'Prestige',desc:'Додаткове онлайн-джерело з актуального community-каталогу.',url:'https://bwa.to/plugins/prestige.js',on:true},
+        {id:'prestige',cat:'online',name:'Prestige',desc:'Додаткове онлайн-джерело з актуального community-каталогу.',url:'https://bwa.to/plugins/prestige.js',on:false},
         {id:'nmprs',cat:'online',name:'NMPRS 4K',desc:'Додаткове онлайн-джерело з підтримкою 4K.',url:'https://num.jac-red.ru/plugin/nmprs.js',on:true},
-        {id:'smotret24',cat:'online',name:'Smotret24',desc:'Ще одне безкоштовне онлайн-джерело Full HD.',url:'http://smotret24.ru/online.js',on:true},
-        {id:'videocdn',cat:'online',name:'VideoCDN',desc:'Резервне відеоджерело. HTTP, тому на окремих збірках може блокуватися.',url:'http://skaz.tv/vcdn.js',on:true},
+        {id:'smotret24',cat:'online',name:'Smotret24',desc:'Ще одне безкоштовне онлайн-джерело Full HD.',url:'http://smotret24.ru/online.js',on:false},
+        {id:'videocdn',cat:'online',name:'VideoCDN',desc:'Резервне відеоджерело. HTTP, тому на окремих збірках може блокуватися.',url:'http://skaz.tv/vcdn.js',on:false},
         {id:'bwa',cat:'online',name:'BWA Online',desc:'Додаткове онлайн-джерело.',url:'https://bwa.to/rc',on:true},
-        {id:'showy',cat:'online',name:'Showy',desc:'Додатковий онлайн-кінотеатр. HTTP-джерело.',url:'http://showy.online/m.js',on:true},
+        {id:'showy',cat:'online',name:'Showy',desc:'Додатковий онлайн-кінотеатр. HTTP-джерело.',url:'http://showy.online/m.js',on:false},
         {id:'modss',cat:'online',name:"MODS's",desc:'Колекція балансерів і додаткових онлайн-джерел.',url:'http://lampa.stream/modss',on:true},
-        {id:'stream1',cat:'online',name:'Online Stream',desc:'Онлайн-джерело з кількома балансерами.',url:'http://arkmv.ru/vod',on:true},
-        {id:'stream2',cat:'online',name:'Online Stream 2',desc:'Додаткове резервне онлайн-джерело.',url:'http://llpp.in/v/vod.js',on:true},
+        {id:'stream1',cat:'online',name:'Online Stream',desc:'Онлайн-джерело з кількома балансерами.',url:'http://arkmv.ru/vod',on:false},
+        {id:'stream2',cat:'online',name:'Online Stream 2',desc:'Додаткове резервне онлайн-джерело.',url:'http://llpp.in/v/vod.js',on:false},
 
         // TORRENTS — TorrServer уже локально на LG.
         {id:'etor',cat:'torrent',name:'Etor: Parser + TorrServer',desc:'На LG/Tizen відкриває штатні пункти Парсер і TorrServer.',url:'http://cub.red/plugin/etor',on:true},
@@ -1688,8 +1688,36 @@ module.exports = QRCode;
         try { Lampa.Storage.set(k, v || ''); } catch (e) {}
     }
 
+    function cleanupStaleSecureLampac() {
+        var token=clientToken(), base=baseUrl().replace(/\/+$/,'').toLowerCase();
+        var keep={};
+        [secureOnlineUrl(),secureSisiUrl(),secureSyncUrl()].forEach(function(u){if(u)keep[norm(u)]=1;});
+        var changed=false, a=registry();
+        for(var i=a.length-1;i>=0;i--){
+            var raw=purl(a[i]), clean=canonicalPluginHost(raw).replace(/[?#].*$/,'').replace(/\/+$/,'');
+            var low=clean.toLowerCase();
+            if(low.indexOf(base+'/')!==0)continue;
+            if(!/^\/(online|sisi|sync)\/js\//.test(low.slice(base.length)))continue;
+            if(!keep[norm(raw)]){try{Lampa.Plugins.remove(a[i]);changed=true;}catch(e){log('stale secure remove error',raw,e);}}
+        }
+        // Defensive cleanup of persisted plugin storage in case runtime registry was already normalized.
+        try{
+            var stored=Lampa.Storage.get('plugins','[]')||[], out=[];
+            stored.forEach(function(it){
+                var raw=purl(it),clean=canonicalPluginHost(raw).replace(/[?#].*$/,'').replace(/\/+$/,''),low=clean.toLowerCase();
+                var stale=low.indexOf(base+'/')===0 && /^\/(online|sisi|sync)\/js\//.test(low.slice(base.length)) && !keep[norm(raw)];
+                if(stale){changed=true;return;}
+                out.push(it);
+            });
+            if(out.length!==stored.length)Lampa.Storage.set('plugins',out);
+        }catch(e2){}
+        if(changed)needRestart(true);
+        return changed;
+    }
+
     function syncSecureLampac(loadNow) {
         var token = clientToken();
+        cleanupStaleSecureLampac();
         var onlineOn = bool(Lampa.Storage.get(LAMPAC_ON_KEY, true));
         var sisiOn = bool(Lampa.Storage.get(SISI_ON_KEY, false)) && !bool(getStorage(KIDS_MODE_KEY,false));
         var syncOn = bool(Lampa.Storage.get(SYNC_ON_KEY, true));
@@ -2194,7 +2222,7 @@ module.exports = QRCode;
             '<div>QR ще не формується, бо TV не отримав сесію спарювання від сервера.</div>'+
             '<div style="margin-top:.8em"><b>Причина:</b> '+reason+(st?' · HTTP '+st:'')+'</div>'+
             '<div style="margin-top:.8em"><b>Перевір з телефона:</b><br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+statusUrl+'</span></div>'+
-            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.10</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
+            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.11</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
             '<div style="margin-top:.8em;opacity:.82">Якщо адреса не відкривається — на сервері перевір Funnel: він має вести HTTPS на <b>127.0.0.1:9120</b>, не на 9118.</div>'+
             '</div>');
         openQrModal('Y7 — діагностика підключення',box,null,60);
@@ -2383,9 +2411,10 @@ module.exports = QRCode;
         var version=parseInt(getStorage(PROFILE_VERSION_KEY,0),10)||0;
         if(version>=PROFILE_VERSION)return;
         ['tmdb_networks','random_scheduled','trash_filter'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,true);});
-        // 4.10 startup hygiene: these legacy endpoints currently return gateway/HTML errors.
-        // Keep them in the catalog for manual retry, but do not auto-load them on every launch.
-        ['bwa','modss','stream1'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,false);});
+        // 4.13.11 startup hygiene: Lampac/Y7 Core already provides the main cinema sources.
+        // Disable legacy/HTTP/known-dead external online plugins that caused startup error storms.
+        // They remain visible in Y7 settings and can still be enabled manually.
+        ['bwa','modss','cinema','prestige','smotret24','videocdn','showy','stream1','stream2'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,false);});
         if(getStorage(SYNC_ON_KEY,'__missing__')==='__missing__')setStorage(SYNC_ON_KEY,true);
         if(getStorage(QUALITY_MIN_KEY,'__missing__')==='__missing__')setStorage(QUALITY_MIN_KEY,720);
         if(getStorage(QUALITY_UA_KEY,'__missing__')==='__missing__')setStorage(QUALITY_UA_KEY,true);
@@ -3904,4 +3933,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.10');
+})('4.13.11');
