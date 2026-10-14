@@ -1294,7 +1294,7 @@ module.exports = QRCode;
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.12
+ * Version: 4.13.13
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -1315,7 +1315,7 @@ module.exports = QRCode;
 (function () {
     'use strict';
 
-    var VERSION = '4.13.12';
+    var VERSION = '4.13.13';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -1332,7 +1332,7 @@ module.exports = QRCode;
     var PROFILE_VERSION_KEY = 'k2pm_profile_version';
     var START_PAGE_KEY = 'k2pm_start_page';
     var IPTV_PRESET_KEY = 'k2pm_iptv_preset';
-    var PROFILE_VERSION = 412;
+    var PROFILE_VERSION = 413;
     var HEALTH_CACHE_KEY = 'k2pm_plugin_health_v1';
     var HEALTH_AUTO_KEY = 'k2pm_plugin_health_auto';
     var HEALTH_TTL = 6 * 60 * 60 * 1000;
@@ -1447,7 +1447,7 @@ module.exports = QRCode;
         {id:'maxsm_ratings',cat:'design',name:'Maxsm Ratings',desc:'Акуратні рейтинги на картках без повного редизайну.',url:'https://tvigl.github.io/plugins/maxsm_ratings.js',on:true},
         {id:'surs_quality',cat:'design',name:'Surs Quality',desc:'Показує доступну якість на картках.',url:'https://tvigl.github.io/plugins/surs_quality.js',on:true},
         {id:'tv_buttons',cat:'design',name:'TV Buttons',desc:'Зручні кнопки/іконки у виборі джерел.',url:'https://apxubatop.github.io/lmpPlugs/tvbutton.js',on:true},
-        {id:'categories_nav',cat:'design',name:'Categories',desc:'Додаткові категорії та зручніша навігація.',url:'https://lampame.github.io/main/newcategory.js',on:true},
+        {id:'categories_nav',cat:'design',name:'Categories (loader alias)',desc:'Старий loader того самого LME Categories. Y7 тримає його OFF, щоб nc.js не запускався двічі.',url:'https://lampame.github.io/main/newcategory.js',on:false},
         {id:'interface_enhancement',cat:'design',name:'Interface Enhancement',desc:'Сильніше змінює інтерфейс. OFF, щоб не повторити проблему з карткою фільму.',url:'https://bylampa.github.io/interface.js',on:false},
         {id:'gold_theme',cat:'design',name:'Golden Theme',desc:'Золотиста тема оформлення.',url:'https://bazzzilius.github.io/scripts/gold_theme.js',on:false},
         {id:'new_interface',cat:'design',name:'New Interface',desc:'Повний альтернативний інтерфейс — експериментальний.',url:'https://bywolf88.github.io/lampa-plugins/interface_mod_new.js',on:false},
@@ -1517,18 +1517,38 @@ module.exports = QRCode;
         return canonicalPluginHost(u).replace(/\/+$/, '').toLowerCase();
     }
 
+    function semanticDupNorm(u) {
+        var k=dupNorm(u);
+        // LME newcategory.js is only a loader for the exact same nc/nc.js plugin.
+        // Treat both URLs as ONE plugin; loading both runs the category/menu initializer twice.
+        if(k==='https://lampame.github.io/main/newcategory.js' || k==='https://lampame.github.io/main/nc/nc.js')
+            return 'y7alias:lme-categories';
+        return k;
+    }
+
+    function preferredDuplicateIndex(group, key) {
+        if(key==='y7alias:lme-categories'){
+            for(var i=0;i<group.length;i++){
+                if(dupNorm(purl(group[i]))==='https://lampame.github.io/main/nc/nc.js')return i;
+            }
+        }
+        return 0;
+    }
+
     function cleanupPluginDuplicates(quiet) {
         var before=registry(), beforeCount=before.length, groups={}, changed=false, removed=0;
         for(var i=0;i<before.length;i++){
-            var raw=purl(before[i]),k=dupNorm(raw);if(!k)continue;
+            var raw=purl(before[i]),k=semanticDupNorm(raw);if(!k)continue;
             if(!groups[k])groups[k]=[];
             groups[k].push(before[i]);
         }
         Object.keys(groups).forEach(function(k){
             var g=groups[k]; if(g.length<2)return;
             // Lampa.Plugins.remove expects the plugin OBJECT, not a URL string.
-            // Keep the first object and remove every later copy from the real runtime registry.
-            for(var j=g.length-1;j>=1;j--){
+            // For semantic aliases keep the canonical direct script, otherwise keep the first record.
+            var keepIndex=preferredDuplicateIndex(g,k);
+            for(var j=g.length-1;j>=0;j--){
+                if(j===keepIndex)continue;
                 try{
                     if(Lampa.Plugins&&Lampa.Plugins.remove){Lampa.Plugins.remove(g[j]);removed++;changed=true;}
                 }catch(e){log('duplicate remove error',purl(g[j]),e);}
@@ -1539,19 +1559,19 @@ module.exports = QRCode;
             var stored=Lampa.Storage.get('plugins','[]')||[];
             if(stored&&stored.push){
                 var seenS={},cleanS=[];
-                stored.forEach(function(it){var k=dupNorm(purl(it));if(k&&seenS[k]){changed=true;return;}if(k)seenS[k]=1;cleanS.push(it);});
+                stored.forEach(function(it){var k=semanticDupNorm(purl(it));if(k&&seenS[k]){var prev=cleanS[seenS[k]-1],cur=purl(it);if(k==='y7alias:lme-categories'&&dupNorm(cur)==='https://lampame.github.io/main/nc/nc.js'){cleanS[seenS[k]-1]=it;}changed=true;return;}if(k){seenS[k]=cleanS.length+1;}cleanS.push(it);});
                 if(cleanS.length!==stored.length)Lampa.Storage.set('plugins',cleanS);
             }
         }catch(es){}
         // Clean duplicate helper lists too, so Y7 does not recreate them later.
         try{
             var ex=extraPlugins(),seenEx={},cleanEx=[];
-            ex.forEach(function(ep){var k=dupNorm(ep&&ep.url);if(!k||seenEx[k])return;seenEx[k]=1;cleanEx.push(ep);});
+            ex.forEach(function(ep){var k=semanticDupNorm(ep&&ep.url);if(!k||seenEx[k])return;seenEx[k]=1;cleanEx.push(ep);});
             if(cleanEx.length!==ex.length){saveExtraPlugins(cleanEx);changed=true;}
         }catch(e3){}
         try{
             var ml=Lampa.Storage.get(MANAGED_KEY,[])||[],seenM={},cleanM=[];
-            ml.forEach(function(u){var k=dupNorm(u);if(!k||seenM[k])return;seenM[k]=1;cleanM.push(u);});
+            ml.forEach(function(u){var k=semanticDupNorm(u);if(!k||seenM[k])return;seenM[k]=1;cleanM.push(u);});
             if(cleanM.length!==ml.length){Lampa.Storage.set(MANAGED_KEY,cleanM);changed=true;}
         }catch(e4){}
         if(changed){save();needRestart(true);}
@@ -1779,6 +1799,122 @@ module.exports = QRCode;
         // Lampa Controller/Navigator keeps its own selector collection; removing
         // menu nodes behind it can leave the whole left navigation visible but dead.
         // Duplicate cleanup is storage/plugin-registry only and takes effect after rebuild/restart.
+    }
+
+
+    var MENU_REPAIR_INSTALLED=false;
+    var MENU_REPAIR_LAST=null;
+
+    function menuRepairEnsureHandlers(){
+        try{
+            var el=document.querySelector('.menu .selector[data-action]');
+            if(!el)return false;
+            var has=null;
+            if(window.jQuery && jQuery._data){
+                var ev=jQuery._data(el,'events')||{};
+                var hs=ev['hover:enter'];
+                has=!!(hs&&hs.length);
+            }
+            if(has===false && Lampa.Menu && typeof Lampa.Menu.ready==='function'){
+                // Lampa's own ready() is the authoritative binder for stock menu actions.
+                Lampa.Menu.ready();
+                return true;
+            }
+            return has!==false;
+        }catch(e){return false;}
+    }
+
+    function menuRepairFocused(){
+        try{return document.querySelector('.wrap__left .menu .selector.focus,.menu .selector.focus');}catch(e){return null;}
+    }
+
+    function menuRepairPatchController(){
+        try{
+            if(!Lampa.Controller||typeof Lampa.Controller.enabled!=='function')return;
+            var en=Lampa.Controller.enabled();
+            if(!en||en.name!=='menu'||!en.controller)return;
+            var c=en.controller;
+            if(c.__y7_menu_enter_repair)return;
+            var previous=c.enter;
+            c.enter=function(){
+                var el=menuRepairFocused();
+                if(el){try{$(el).trigger('hover:enter');return true;}catch(e){}}
+                if(typeof previous==='function')return previous.apply(c,arguments);
+            };
+            c.__y7_menu_enter_repair=true;
+        }catch(e){}
+    }
+
+    function menuRepairFocus(el){
+        if(!el)return;
+        try{
+            var menu=el.closest?el.closest('.menu'):null;
+            if(menu&&menu.classList&&menu.classList.contains('editable'))return;
+            if(Lampa.Controller&&typeof Lampa.Controller.enabled==='function'){
+                var en=Lampa.Controller.enabled();
+                if(!en||en.name!=='menu')Lampa.Controller.toggle('menu');
+            }
+            menuRepairEnsureHandlers();
+            menuRepairPatchController();
+            if(Lampa.Controller&&typeof Lampa.Controller.focus==='function')Lampa.Controller.focus(el);
+            else { $('.menu .selector').removeClass('focus');$(el).addClass('focus'); }
+        }catch(e){}
+    }
+
+    function installMenuInteractionRepair(){
+        if(MENU_REPAIR_INSTALLED)return;
+        MENU_REPAIR_INSTALLED=true;
+        try{
+            if(!document.getElementById('y7-menu-interaction-repair')){
+                var st=document.createElement('style');
+                st.id='y7-menu-interaction-repair';
+                st.textContent='body.menu--open .wrap__left{pointer-events:auto!important;z-index:999!important}body.menu--open .wrap__left .menu{pointer-events:auto!important}';
+                (document.head||document.documentElement).appendChild(st);
+            }
+        }catch(e0){}
+
+        try{
+            if(Lampa.Controller&&Lampa.Controller.listener&&Lampa.Controller.listener.follow){
+                Lampa.Controller.listener.follow('toggle',function(ev){
+                    if(ev&&ev.name==='menu'){
+                        setTimeout(function(){menuRepairEnsureHandlers();menuRepairPatchController();},0);
+                    }
+                });
+            }
+        }catch(e1){}
+
+        // Magic Remote / mouse fallback: focus the menu item directly when the pointer enters it.
+        try{
+            document.addEventListener('mouseover',function(e){
+                if(!document.body||!document.body.classList.contains('menu--open'))return;
+                var el=e.target&&e.target.closest?e.target.closest('.wrap__left .menu .selector'):null;
+                if(!el||el===MENU_REPAIR_LAST)return;
+                MENU_REPAIR_LAST=el;
+                menuRepairFocus(el);
+            },true);
+            document.addEventListener('mousemove',function(e){
+                if(!document.body||!document.body.classList.contains('menu--open'))return;
+                var el=e.target&&e.target.closest?e.target.closest('.wrap__left .menu .selector'):null;
+                if(el&&el!==MENU_REPAIR_LAST){MENU_REPAIR_LAST=el;menuRepairFocus(el);}
+            },true);
+        }catch(e2){}
+
+        // Deterministic click path for the left menu. We intercept only normal menu mode,
+        // then fire Lampa's native custom event once; this bypasses broken/missing click binders.
+        try{
+            document.addEventListener('click',function(e){
+                if(!document.body||!document.body.classList.contains('menu--open'))return;
+                var el=e.target&&e.target.closest?e.target.closest('.wrap__left .menu .selector'):null;
+                if(!el)return;
+                var menu=el.closest?el.closest('.menu'):null;
+                if(menu&&menu.classList&&menu.classList.contains('editable'))return;
+                try{e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();}catch(_e){}
+                menuRepairFocus(el);
+                setTimeout(function(){try{$(el).trigger('hover:enter');}catch(_e2){}},0);
+            },true);
+        }catch(e3){}
+
+        setTimeout(function(){menuRepairEnsureHandlers();menuRepairPatchController();},250);
     }
 
     function extraPlugins() {
@@ -2211,7 +2347,7 @@ module.exports = QRCode;
             '<div>QR ще не формується, бо TV не отримав сесію спарювання від сервера.</div>'+
             '<div style="margin-top:.8em"><b>Причина:</b> '+reason+(st?' · HTTP '+st:'')+'</div>'+
             '<div style="margin-top:.8em"><b>Перевір з телефона:</b><br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+statusUrl+'</span></div>'+
-            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.12</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
+            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.13</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
             '<div style="margin-top:.8em;opacity:.82">Якщо адреса не відкривається — на сервері перевір Funnel: він має вести HTTPS на <b>127.0.0.1:9120</b>, не на 9118.</div>'+
             '</div>');
         openQrModal('Y7 — діагностика підключення',box,null,60);
@@ -2403,7 +2539,8 @@ module.exports = QRCode;
         // 4.13.11 startup hygiene: Lampac/Y7 Core already provides the main cinema sources.
         // Disable legacy/HTTP/known-dead external online plugins that caused startup error storms.
         // They remain visible in Y7 settings and can still be enabled manually.
-        ['bwa','modss','cinema','prestige','smotret24','videocdn','showy','stream1','stream2'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,false);});
+        ['bwa','modss','cinema','prestige','smotret24','videocdn','showy','stream1','stream2','categories_nav'].forEach(function(id){var p=pluginById(id);if(p)setEnabled(p,false);});
+        var nc=pluginById('more_categories');if(nc)setEnabled(nc,true);
         if(getStorage(SYNC_ON_KEY,'__missing__')==='__missing__')setStorage(SYNC_ON_KEY,true);
         if(getStorage(QUALITY_MIN_KEY,'__missing__')==='__missing__')setStorage(QUALITY_MIN_KEY,720);
         if(getStorage(QUALITY_UA_KEY,'__missing__')==='__missing__')setStorage(QUALITY_UA_KEY,true);
@@ -3876,6 +4013,7 @@ function remotePlatformCaps() {
         registerFullManager();
         setupSettings();
         listenSettings();
+        installMenuInteractionRepair();
         applyHealthSuppression(healthCache());
         var r=reconcile(true);
         if(!r.changed)needRestart(false);
@@ -3927,4 +4065,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.12');
+})('4.13.13');
