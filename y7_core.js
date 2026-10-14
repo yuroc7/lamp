@@ -1294,7 +1294,7 @@ module.exports = QRCode;
 /*
  * Y7 Media for Lampa
  * File: 1.js
- * Version: 4.13.11
+ * Version: 4.13.12
  *
  * Y7 Core pairing:
  *   QR -> Y7 Core -> Admin PIN -> unique per-TV token
@@ -1315,7 +1315,7 @@ module.exports = QRCode;
 (function () {
     'use strict';
 
-    var VERSION = '4.13.11';
+    var VERSION = '4.13.12';
     var COMPONENT = 'k2_plugin_manager';
     var DEFAULT_FUNNEL = 'https://02-108-prohidna.tail6cc3cf.ts.net';
 
@@ -1332,7 +1332,7 @@ module.exports = QRCode;
     var PROFILE_VERSION_KEY = 'k2pm_profile_version';
     var START_PAGE_KEY = 'k2pm_start_page';
     var IPTV_PRESET_KEY = 'k2pm_iptv_preset';
-    var PROFILE_VERSION = 411;
+    var PROFILE_VERSION = 412;
     var HEALTH_CACHE_KEY = 'k2pm_plugin_health_v1';
     var HEALTH_AUTO_KEY = 'k2pm_plugin_health_auto';
     var HEALTH_TTL = 6 * 60 * 60 * 1000;
@@ -1775,21 +1775,10 @@ module.exports = QRCode;
             needRestart(true);
         }
 
-        // Clean already-rendered duplicates in the left menu too.
-        try {
-            var seen={};
-            $('.menu .menu__list .selector,.menu .selector').each(function(){
-                var el=$(this);
-                if(el.hasClass('y7-head-remote'))return;
-                var t=String(el.text()||'').replace(/\s+/g,' ').trim().toLowerCase();
-                var kind='';
-                if(/xsena|xena\s*red|ксена/.test(t))kind='xsena';
-                else if(/клубнич|клубничка|strawberry/.test(t))kind='strawberry';
-                if(!kind)return;
-                if(seen[kind])el.remove();
-                else seen[kind]=true;
-            });
-        } catch(e){}
+        // IMPORTANT: never mutate already-rendered .menu DOM here.
+        // Lampa Controller/Navigator keeps its own selector collection; removing
+        // menu nodes behind it can leave the whole left navigation visible but dead.
+        // Duplicate cleanup is storage/plugin-registry only and takes effect after rebuild/restart.
     }
 
     function extraPlugins() {
@@ -2222,7 +2211,7 @@ module.exports = QRCode;
             '<div>QR ще не формується, бо TV не отримав сесію спарювання від сервера.</div>'+
             '<div style="margin-top:.8em"><b>Причина:</b> '+reason+(st?' · HTTP '+st:'')+'</div>'+
             '<div style="margin-top:.8em"><b>Перевір з телефона:</b><br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+statusUrl+'</span></div>'+
-            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.11</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
+            '<div style="margin-top:.5em">Якщо там є JSON з <b>version 4.13.12</b> — сервер доступний. Тоді відкрий:<br><span style="color:#a9d2ff;overflow-wrap:anywhere">'+pairUrl+'</span></div>'+
             '<div style="margin-top:.8em;opacity:.82">Якщо адреса не відкривається — на сервері перевір Funnel: він має вести HTTPS на <b>127.0.0.1:9120</b>, не на 9118.</div>'+
             '</div>');
         openQrModal('Y7 — діагностика підключення',box,null,60);
@@ -3542,8 +3531,12 @@ function remotePlatformCaps() {
                     return this.render();
                 };
                 this.render=function(){return root;};
+                function detachFullController(){
+                    try{if(Lampa.Controller&&Lampa.Controller.remove)Lampa.Controller.remove('k2full');}catch(e){}
+                }
                 this.start=function(){
                     if(Lampa.Activity.active().activity!==this.activity)return;
+                    detachFullController();
                     Lampa.Controller.add('k2full',{
                         toggle:function(){Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(last||root.find('.selector')[0],root);},
                         up:function(){Navigator.move('up');setTimeout(function(){var f=root.find('.selector.focus').first();if(f.length)try{scroll.immediate(f,true);}catch(e){}},0);},
@@ -3554,9 +3547,10 @@ function remotePlatformCaps() {
                     });
                     Lampa.Controller.toggle('k2full');
                 };
-                this.back=function(){Lampa.Activity.backward();};
-                this.pause=function(){};this.stop=function(){};
-                this.destroy=function(){try{scroll.destroy();}catch(e){}root.remove();body.remove();};
+                this.back=function(){detachFullController();Lampa.Activity.backward();};
+                this.pause=function(){detachFullController();};
+                this.stop=function(){detachFullController();};
+                this.destroy=function(){detachFullController();try{scroll.destroy();}catch(e){}root.remove();body.remove();};
             });
         }catch(e){log('full manager register error',e);}
     }
@@ -3933,4 +3927,4 @@ function remotePlatformCaps() {
     boot();
 })();
 
-})('4.13.11');
+})('4.13.12');
