@@ -2797,17 +2797,26 @@ function drawHeroes(){
         try{if(window.Lampa&&Lampa.Player&&typeof Lampa.Player.opened==='function'&&Lampa.Player.opened())return true;}catch(e2){}
         return false;
     }
+    function y7SportWatching(){
+        try{
+            // Ignore abandoned globals if the Sport heartbeat stops (crash/unload).
+            var stamp=Number(window.__Y7_SPORT_WATCHING_AT__||0);
+            return !!window.__Y7_SPORT_WATCHING__ && Date.now()-stamp<60000 && Date.now()>=stamp;
+        }catch(e){return false;}
+    }
     function y7GamesVisible(){try{return !!document.querySelector('.y7a-root');}catch(e){return false;}}
     function idleTick(){
         try{
-            var st=readState();if(!st.screensaver||document.hidden||y7VideoPlaying()||y7GamesVisible())return;try{if(Lampa.Modal&&Lampa.Modal.opened&&Lampa.Modal.opened())return;}catch(em){}
+            var st=readState();if(document.hidden||y7SportWatching()||y7VideoPlaying()){noteY7Activity();return;}if(!st.screensaver||y7GamesVisible())return;try{if(Lampa.Modal&&Lampa.Modal.opened&&Lampa.Modal.opened())return;}catch(em){}
             var mins=Math.max(1,Math.min(30,parseInt(st.screensaver_minutes,10)||5));
             if(Date.now()-Y7_IDLE_LAST>=mins*60000){Y7_IDLE_LAST=Date.now();openAquarium(true);}
         }catch(e){}
     }
     function installIdleAquarium(){
         if(Y7_IDLE_TIMER)return;Y7_IDLE_LAST=Date.now();
-        try{document.addEventListener('keydown',noteY7Activity,true);document.addEventListener('mousedown',noteY7Activity,true);document.addEventListener('touchstart',noteY7Activity,true);document.addEventListener('click',noteY7Activity,true);document.addEventListener('pointermove',function(){var n=Date.now();if(n-Y7_IDLE_MOVE>600){Y7_IDLE_MOVE=n;noteY7Activity();}},true);}catch(e){}
+        window.__Y7_KIDS_SPORT_IDLE_PROTOCOL__=1;
+        try{if(Lampa.Player&&Lampa.Player.listener)Lampa.Player.listener.follow('close',noteY7Activity);}catch(e){}
+        try{document.addEventListener('y7:sport-activity',noteY7Activity,true);document.addEventListener('keydown',noteY7Activity,true);document.addEventListener('mousedown',noteY7Activity,true);document.addEventListener('touchstart',noteY7Activity,true);document.addEventListener('click',noteY7Activity,true);document.addEventListener('pointermove',function(){var n=Date.now();if(n-Y7_IDLE_MOVE>600){Y7_IDLE_MOVE=n;noteY7Activity();}},true);}catch(e){}
         Y7_IDLE_TIMER=setInterval(idleTick,10000);
     }
 
