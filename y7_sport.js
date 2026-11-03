@@ -1,5 +1,5 @@
 /*
- * Y7 SPORT / Football First 1.1.0
+ * Y7 SPORT / Football First 1.1.2
  * Separate Lampa / LG webOS extension: no changes to 1.js, Lampac or Y7 Gateway.
  * Uses static, automatically refreshed public match metadata from GitHub Pages.
  * LiveTV: embedded single-event player where provided, plus explicitly public video tags.
@@ -7,15 +7,15 @@
  */
 (function(){
     'use strict';
-    var VERSION='1.1.0',KEY='__Y7_SPORT_FOOTBALL_110__';
+    var VERSION='1.1.2',KEY='__Y7_SPORT_FOOTBALL_112__';
     if(window[KEY])return;
     window[KEY]=true;
-    var COMPONENT='y7_sport_110',CTRL='y7_sport_110_ctrl';
-    var PLAYER_COMPONENT='y7_sport_live_player_110',PLAYER_CTRL='y7_sport_live_player_ctrl_110';
+    var COMPONENT='y7_sport_112',CTRL='y7_sport_112_ctrl';
+    var PLAYER_COMPONENT='y7_sport_live_player_112',PLAYER_CTRL='y7_sport_live_player_ctrl_112';
     var playerRequest=null;
     var BASE='https://yuroc7.github.io/lamp/';
     var FEED=BASE+'y7_sport_feed.json';
-    var STORE='y7_sport_feed_110';
+    var STORE='y7_sport_feed_112';
     var ICON='<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 7l3 3M19 7l-3 3M6 17l3-2M18 17l-3-2"/></svg>';
     var SERVICES=[
         {id:'suspilne',name:'Суспільне Спорт',category:'ua',cost:'free',url:'https://suspilne.media/sport/schedule/live/',note:'Українські безкоштовні трансляції; доступність конкретних подій залежить від прав.'},
@@ -177,7 +177,7 @@
         choices=(choices||[]).filter(function(x){return isPlayer(x)&&x.kind==='embed';});
         if(!choices.length)return notify('Вбудований плеєр не знайдено');
         playerRequest={title:title,choices:choices,start:Math.max(0,start||0)};
-        try{Lampa.Activity.push({url:'y7://sport/live/1.1.0',title:title,component:PLAYER_COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/live/1.1.2',title:title,component:PLAYER_COMPONENT,page:1});}
         catch(e){notify('Не вдалося відкрити плеєр');}
     }
     function LivePlayer(){
@@ -242,7 +242,7 @@
             var name=p.kind==='direct'?'▶ Відеопотік '+(i+1):'▶ Плеєр LiveTV '+(i+1)+' · всередині Lampa';
             choices.push({label:name,kind:p.kind,url:p.url,play:p.kind==='direct'});
         });
-        choices.push({label:'Оригінальна сторінка (реклама може бути!)',url:event.url});
+        choices.push({label:'Сторінка LiveTV · тільки QR для телефона',kind:'qr',url:event.url});
         if(!available.length)notify('Прямого відео поки не виявлено. Сторінка LiveTV — лише вручну.');
         try{
             Lampa.Select.show({title:title,
@@ -253,6 +253,7 @@
                     if(!c)return;
                     if(c.kind==='direct')return playStream(c.url,title);
                     if(c.kind==='embed')return showEmbedded(title,available.filter(function(p){return p.kind==='embed';}),available.filter(function(p){return p.kind==='embed';}).findIndex(function(p){return p.url===c.url;}));
+                    if(c.kind==='qr')return qr(c.url,'LiveTV · сторінка матчу (телефон)');
                     return openExternal(c.url,'LiveTV · зовнішній сайт із рекламою');
                 },onBack:function(){Lampa.Controller.toggle(CTRL);}
             });
@@ -331,6 +332,8 @@
             body.append(hero);
             TABS.forEach(button);
             row('↻ Оновити матчі та посилання','Завантажити новий список з Y7 Sport (автооновлення кожні 20 хв).','ОНОВИТИ',function(){cacheTime=0;load(true);});
+            var probes=feed.health&&feed.health.livetv_player_probes;
+            if(probes&&tab==='livetv')row('Стан перевірки плеєрів','Завантажено сторінок: '+(probes.fetched||0)+'/'+(probes.attempted||0)+' · помилки: '+(probes.errors||0)+' · iframe: '+(probes.with_embeds||0),'СТАТУС',function(){notify('Знайдений iframe ще не означає робочий відеопотік');});
             if(tab==='today'||tab==='europe'||tab==='ua'){
                 section(tab==='today'?'Футбол сьогодні':tab==='ua'?'Матчі українських клубів':'Найближчі єврокубки');
                 var matches=filterFixtures(feed,tab);
@@ -351,7 +354,7 @@
                 var events=(feed.livetv||[]).slice(0,85);
                 if(!events.length)row('Список поки порожній','LiveTV може тимчасово блокувати автоматичне зчитування; відкрий сайт.','','');
                 events.forEach(function(e){
-                    var found=playableChoices(e),label=found.length?('Знайдено '+found.length+' плеєр(ів), робота не підтверджена'):'Сайт не опублікував доступного окремого відеоплеєра';
+                    var found=playableChoices(e),label=found.length?('Знайдено '+found.length+' плеєр(ів), робота не підтверджена'):(e.probe_status==='fetch_error'?'Перевірка цієї сторінки не вдалася':(!Array.isArray(e.players)?'Плеєр ще не перевірявся':'Окремого плеєра матчу не виявлено'));
                     row(e.title||'Матч',label,found.length?'▶ ПЛЕЄРИ':'ДЖЕРЕЛА',function(){livetvOptions(e);});
                 });
             }else if(tab==='free'||tab==='all'){
@@ -402,7 +405,7 @@
         this.destroy=function(){dead=true;if(timer)clearInterval(timer);off();try{scroll.destroy();}catch(e){}root.remove();};
     }
     function openSport(){
-        try{Lampa.Activity.push({url:'y7://sport/1.1.0',title:'Y7 Спорт',component:COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/1.1.2',title:'Y7 Спорт',component:COMPONENT,page:1});}
         catch(e){notify('не вдалося відкрити модуль');}
     }
     function boot(){
