@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "version": "1.1.0",
-  "updated_at": "2026-11-03T18:08:31.450533Z",
+  "version": "1.1.2",
+  "updated_at": "2026-11-03T18:50:09.944720Z",
   "timezone": "Europe/Kyiv",
   "fixtures": [
     {
@@ -49,54 +49,6 @@
       "players": []
     },
     {
-      "id": "571148339",
-      "title": "Аль-Хиляль – Шабаб Аль-Ахли",
-      "url": "https://livetv.sx/eventinfo/571148339__/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "browser_options": 0,
-      "acestream_options": 1,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена",
-      "players": []
-    },
-    {
-      "id": "570717779",
-      "title": "Эстегляль Тегеран – Аль-Шамаль",
-      "url": "https://livetv.sx/eventinfo/570717779_esteglyal_tegeran_al_shamal/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "players": []
-    },
-    {
-      "id": "570517540",
-      "title": "Истра – Неретва",
-      "url": "https://livetv.sx/eventinfo/570517540_istra_neretva/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "players": []
-    },
-    {
-      "id": "570516114",
-      "title": "Аль-Хуссейн – Аль-Шорта",
-      "url": "https://livetv.sx/eventinfo/570516114_al_husseyn_al_shorta/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "players": []
-    },
-    {
-      "id": "631211934",
-      "title": "Езеро – Дечич",
-      "url": "https://livetv.sx/eventinfo/631211934_ezero_dechich/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "players": []
-    },
-    {
       "id": "626857424",
       "title": "Dolphins – Western Province",
       "url": "https://livetv.sx/enx/eventinfo/626857424_dolphins_western_province/",
@@ -109,33 +61,12 @@
       "players": []
     },
     {
-      "id": "631211928",
-      "title": "АЕЛ Лимасол – Ираклис Геролаккос",
-      "url": "https://livetv.sx/eventinfo/631211928_ael_limasol_iraklis_gerolakkos/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "players": []
-    },
-    {
-      "id": "627152054",
-      "title": "Lokomotiv Zagreb (W) – Koka (W)",
-      "url": "https://livetv.sx/enx/eventinfo/627152054_lokomotiv_zagreb_w_koka_w/",
-      "sport": "football",
-      "provider": "LiveTV",
-      "playable": false,
-      "players": []
-    },
-    {
       "id": "628465237",
       "title": "Спартак Кс – Волна",
       "url": "https://livetv.sx/eventinfo/628465237_spartak_ks_volna/",
       "sport": "football",
       "provider": "LiveTV",
       "playable": false,
-      "browser_options": 2,
-      "acestream_options": 2,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена",
       "players": []
     },
     {
@@ -145,9 +76,6 @@
       "sport": "football",
       "provider": "LiveTV",
       "playable": false,
-      "browser_options": 1,
-      "acestream_options": 0,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена",
       "players": []
     },
     {
@@ -192,7 +120,8 @@
       "url": "https://livetv.sx/enx/eventinfo/570716540__ferencvaros_w__esztergom_w/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "631211929",
@@ -200,7 +129,11 @@
       "url": "https://livetv.sx/eventinfo/631211929_karmiotissa_ermis_aradipu/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "631200936",
@@ -208,7 +141,11 @@
       "url": "https://livetv.sx/eventinfo/631200936_mamelodi_golden_errous/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "628507022",
@@ -216,7 +153,11 @@
       "url": "https://livetv.sx/eventinfo/628507022_anaytasuna_alaves/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 1,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "570911102",
@@ -224,7 +165,11 @@
       "url": "https://livetv.sx/eventinfo/570911102_sirius_halmstad/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "627760150",
@@ -232,7 +177,11 @@
       "url": "https://livetv.sx/eventinfo/627760150_smuha_piramids/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "627760151",
@@ -240,7 +189,11 @@
       "url": "https://livetv.sx/eventinfo/627760151_enppi_asyt_petroleum/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "627150523",
@@ -262,6 +215,22 @@
       "id": "631228089",
       "title": "Doukas – AEL",
       "url": "https://livetv.sx/enx/eventinfo/631228089_doukas_ael/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571148339",
+      "title": "Аль-Хиляль – Шабаб Аль-Ахли",
+      "url": "https://livetv.sx/eventinfo/571148339__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "630601560",
+      "title": "Малага (Ж) – Реал Овьедо (Ж)",
+      "url": "https://livetv.sx/eventinfo/630601560_malaga_women_real_oviedo_w/",
       "sport": "football",
       "provider": "LiveTV",
       "playable": false
@@ -788,6 +757,46 @@
       "sport": "football",
       "provider": "LiveTV",
       "playable": false
+    },
+    {
+      "id": "575257546",
+      "title": "Kuwait SC – Nasaf",
+      "url": "https://livetv.sx/enx/eventinfo/575257546__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "616395075",
+      "title": "Artis Brno – Bohemians",
+      "url": "https://livetv.sx/enx/eventinfo/616395075__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "575567173",
+      "title": "TS Galaxy – Durban City",
+      "url": "https://livetv.sx/enx/eventinfo/575567173__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "575567174",
+      "title": "Kaizer Chiefs – AmaZulu",
+      "url": "https://livetv.sx/enx/eventinfo/575567174__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "575567175",
+      "title": "Golden Arrows – Marumo Gallants",
+      "url": "https://livetv.sx/enx/eventinfo/575567175__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
     }
   ],
   "services": [
@@ -880,12 +889,21 @@
     "livetv_ok": true,
     "livetv_errors": 0,
     "livetv_note": "LiveTV: explicit public player embeds/video tags only; player availability unverified",
+    "livetv_player_probes": {
+      "attempted": 18,
+      "fetched": 18,
+      "errors": 0,
+      "with_embeds": 0,
+      "with_media": 0,
+      "without_event_id": 18,
+      "error_types": {}
+    },
     "livetv_players_found": 0,
     "livetv_events_with_players": 0,
     "errors": [
-      "uefa.champions:HTTPError",
-      "uefa.europa:HTTPError",
-      "uefa.europa.conf:HTTPError"
+      "uefa.europa.conf:RuntimeError",
+      "uefa.champions:RuntimeError",
+      "uefa.europa:RuntimeError"
     ]
   }
 }
