@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "version": "1.1.2",
-  "updated_at": "2026-11-03T18:50:09.944720Z",
+  "version": "1.1.3",
+  "updated_at": "2026-11-03T19:00:00.956518Z",
   "timezone": "Europe/Kyiv",
   "fixtures": [
     {
@@ -43,7 +43,7 @@
       "sport": "football",
       "provider": "LiveTV",
       "playable": false,
-      "browser_options": 5,
+      "browser_options": 4,
       "acestream_options": 3,
       "player_info": "Опис варіантів на сторінці; робота не перевірена",
       "players": []
@@ -142,9 +142,6 @@
       "sport": "football",
       "provider": "LiveTV",
       "playable": false,
-      "browser_options": 0,
-      "acestream_options": 0,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена",
       "players": []
     },
     {
@@ -250,6 +247,9 @@
       "sport": "football",
       "provider": "LiveTV",
       "playable": false,
+      "browser_options": 4,
+      "acestream_options": 1,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
       "players": []
     },
     {
@@ -886,6 +886,7 @@
     "fixtures_ok": 0,
     "fixtures_total": 3,
     "fixtures_fallback": false,
+    "calendar_sources": {},
     "livetv_ok": true,
     "livetv_errors": 0,
     "livetv_note": "LiveTV: explicit public player embeds/video tags only; player availability unverified",
@@ -896,6 +897,9 @@
       "with_embeds": 0,
       "with_media": 0,
       "without_event_id": 18,
+      "with_webplayer_text": 18,
+      "with_raw_webplayer_markup": 18,
+      "event_scoped_candidates": 0,
       "error_types": {}
     },
     "livetv_players_found": 0,
