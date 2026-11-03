@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Y7 Sport feed builder v1.1.2.
+"""Y7 Sport feed builder v1.1.3.
 
 Public fixture metadata (ESPN), LiveTV event navigation, and detection of explicitly
 published video tags and LiveTV single-event embed players. No DRM/paywall/ad
@@ -37,7 +37,7 @@ TAG = re.compile(r'<[^>]+>')
 FOOTBALL = re.compile(r'(?iu)\b(?:football|soccer|футбол|liga champions|лига чемпионов|ліга чемпіонів)\b')
 OTHER_SPORT = re.compile(r'(?iu)\b(?:hockey|хоккей|tennis|теннис|basketball|баскетбол|volleyball|волейбол|mma|мма|бокс|boxing|snooker|снукер|baseball|бейcбол)\b')
 TIMEOUT = 14
-ALLOWED_UPSTREAM = {'livetv.sx','www.livetv.sx','site.api.espn.com','cdn.espn.com','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me'}
+ALLOWED_UPSTREAM = {'livetv.sx','www.livetv.sx','site.api.espn.com','cdn.espn.com','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me','www.thesportsdb.com'}
 
 class SafeRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -150,10 +150,14 @@ def fetch_espn(slug, date_start, date_end):
     try:
         raw=json.loads(get_url(url,5_000_000))
         matches=[x for e in raw.get('events',[]) if (x:=event_to_fixture(e,slug))]
-        if matches:return matches
+        if matches:
+            CALENDAR_SOURCES[slug]='ESPN Site API'
+            return matches
         single=json.loads(get_url(base+'?dates='+(date_start+timedelta(days=1)).strftime('%Y%m%d'),5_000_000))
         matches=[x for e in single.get('events',[]) if (x:=event_to_fixture(e,slug))]
-        if matches:return matches
+        if matches:
+            CALENDAR_SOURCES[slug]='ESPN Site API'
+            return matches
     except Exception as exc:
         errors.append(type(exc).__name__)
     # ESPN CDN is a distinct host that may remain accessible if Site API returns 403.
@@ -168,8 +172,66 @@ def fetch_espn(slug, date_start, date_end):
                 if ev and ev['id'] not in seen:
                     seen.add(ev['id']);matches.append(ev)
         except Exception as exc: errors.append('cdn:'+type(exc).__name__)
-    if matches:return matches
-    raise RuntimeError('ESPN site/CDN unavailable: '+','.join(sorted(set(errors))[:4]))
+    if matches:
+        CALENDAR_SOURCES[slug]='ESPN CDN'
+        return matches
+    try:
+        other=fetch_sportsdb(slug,date_start,date_end)
+        if other:
+            CALENDAR_SOURCES[slug]='TheSportsDB V1'
+            return other
+    except Exception as exc:errors.append('sportsdb:'+type(exc).__name__)
+    raise RuntimeError('Calendar unavailable: '+','.join(sorted(set(errors))[:4]))
+
+
+# TheSportsDB publishes a public, limited V1 calendar. Treat it as a fallback,
+# not as official broadcasting information; do not guess missing kickoff times.
+SPORTSDB_IDS={'uefa.champions':'4480','uefa.europa':'4481'}
+CALENDAR_SOURCES={}
+
+def event_from_sportsdb(obj,slug):
+    if not isinstance(obj,dict) or slug not in LEAGUES:return None
+    home=str(obj.get('strHomeTeam') or '').strip()[:90]
+    away=str(obj.get('strAwayTeam') or '').strip()[:90]
+    if not home or not away:return None
+    stamp=str(obj.get('strTimestamp') or '')
+    if not stamp:return None
+    try:
+        dt=datetime.fromisoformat(stamp.replace('Z','+00:00'))
+        if not dt.tzinfo:return None  # no guessed timezone
+        dt=dt.astimezone(timezone.utc)
+    except (ValueError,TypeError):return None
+    status=str(obj.get('strStatus') or '').strip().lower()
+    done=status in ('match finished','finished','ft','full time','after extra time')
+    rank,competition=LEAGUES[slug][2],LEAGUES[slug][1]
+    result={'id':'tsdb-'+str(obj.get('idEvent') or dt.isoformat()+home+away)[:100],
+            'league':LEAGUES[slug][0], 'competition':competition,'rank':rank,
+            'home':home,'away':away,'kickoff':dt.isoformat().replace('+00:00','Z'),
+            'status':'finished' if done else 'scheduled',
+            'important':bool(UA_TERMS.search(home+' '+away)),
+            'broadcast':{'name':'Перевірити офіційного мовника', 'cost':'unknown',
+                         'url':'https://www.uefa.com/', 'note':'Джерело календаря не повідомляє телеправа'},
+            'source':'TheSportsDB public V1'}
+    if done and obj.get('intHomeScore') is not None and obj.get('intAwayScore') is not None:
+        result['score']=str(obj['intHomeScore'])+' : '+str(obj['intAwayScore'])
+    return result
+
+def fetch_sportsdb(slug,date_start,date_end):
+    league=SPORTSDB_IDS.get(slug)
+    if not league:return []
+    season=str(date_start.year if date_start.month>=7 else date_start.year-1)
+    url='https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id='+league+'&s='+season+'-'+str(int(season)+1)
+    data=json.loads(get_url(url,3_000_000))
+    events=data.get('events') if isinstance(data,dict) else []
+    lower=date_start.date() if isinstance(date_start,datetime) else date_start
+    upper=date_end.date() if isinstance(date_end,datetime) else date_end
+    result=[]
+    for obj in (events or []):
+        event=event_from_sportsdb(obj,slug)
+        if event:
+            local_day=datetime.fromisoformat(event['kickoff'].replace('Z','+00:00')).astimezone(TZ).date()
+            if lower<=local_day<=upper:result.append(event)
+    return result
 
 
 class LiveTVLinks(HTMLParser):
@@ -293,15 +355,54 @@ class PublicPlayers(HTMLParser):
         if tag=='textarea' and self.in_textarea:
             self.textareas.append(''.join(self.buf));self.in_textarea=False;self.buf=[]
 
+
+def _decode_public_html(html):
+    if not isinstance(html,bytes):return str(html)
+    header=html[:4000].lower()
+    charset='cp1251' if b'windows-1251' in header or b'charset=cp1251' in header else 'utf-8'
+    return html.decode(charset,'replace')
+
+# Match only literal iframe markup. Do not interpret arbitrary URLs found in scripts.
+IFRAME_MARKUP=re.compile(r'(?is)<iframe\b[^>]{0,3000}>')
+IFRAME_SRC=re.compile(r"(?i)\bsrc\s*=\s*(?:\"([^\"]{1,2200})\"|\x27([^\x27]{1,2200})\x27|([^\s>]{1,2200}))")
+
+def discover_iframe_markup(html):
+    """Find literal iframe markup in raw HTML/escaped templates; never execute JS."""
+    raw=re.sub(r'(?s)<!--.*?-->','',_decode_public_html(html))
+    # Some publishers HTML-escape iframe markup inside textareas or JS templates.
+    # Do not evaluate scripts or follow these URLs. Each is validated by add().
+    variants=(raw,unescape(raw),unescape(raw).replace('\\"','"').replace('\\/','/'))
+    urls=[];seen=set()
+    for body in variants:
+        for tag in IFRAME_MARKUP.finditer(body):
+            match=IFRAME_SRC.search(tag.group(0))
+            if match:
+                url=(match.group(1) or match.group(2) or match.group(3) or '').strip()
+                if url and url not in seen:seen.add(url);urls.append(url)
+    return urls
+
+def summarize_player_markup(html,event_url):
+    raw=_decode_public_html(html)
+    parsed=PublicPlayers()
+    parsed.feed(raw)
+    raw_markup=discover_iframe_markup(raw)
+    parsed_embeds=sum(1 for u in parsed.frames if 'webplayer' in u.lower())
+    escaped_embeds=sum(1 for u in raw_markup if 'webplayer' in u.lower())
+    scoped=extract_public_players(raw,event_url)
+    return {'webplayer_text':int('webplayer' in raw.lower()),
+            'parsed_frames':len(parsed.frames),
+            'parsed_webplayers':parsed_embeds,
+            'raw_iframe_markup':len(raw_markup),
+            'raw_webplayers':escaped_embeds,
+            'event_scoped_candidates':len(scoped)}
+
 def extract_public_players(html,event_url):
     """Extract declared, non-DRM source/iframe URLs only; does NOT assert rights.
 
     The official LiveTV webmaster single-event iframe code is preferable.
     Third-party iframe embeds and scripts are deliberately not visited/executed.
     """
-    if isinstance(html,bytes):
-        head=html[:1500].lower()
-        html=html.decode('cp1251' if b'windows-1251' in head else 'utf-8','replace')
+    html=_decode_public_html(html)
     parser=PublicPlayers()
     try:parser.feed(html)
     except Exception:return []
@@ -328,11 +429,13 @@ def extract_public_players(html,event_url):
             params=urllib.parse.parse_qs(u.query)
             references=[v for k,vs in params.items() if k.lower() in ('event','eventid','event_id','match','matchid','id','eid') for v in vs]
             if not event_id or event_id not in references:return
+            if any(x.lower() in ('token','auth','apikey','api_key','secret','signature','sig','session') for x in params):return
         elif not MEDIA_EXT.search(url):return
         seen.add(url)
         players.append({'kind':kind,'url':url,'title':'Вбудований плеєр LiveTV' if kind=='embed' else 'Відеопотік із HTML',
                         'verified':False,'note':'Джерело знайдене в HTML; доступність та права не підтверджені'})
     for raw in parser.frames:add('embed',raw)
+    for raw in discover_iframe_markup(html):add('embed',raw)
     for raw in parser.media:add('direct',raw)
     return players[:MAX_PLAYERS_PER_EVENT]
 
@@ -340,7 +443,7 @@ LAST_LIVETV_PROBES = {}
 def fetch_livetv():
     errors=[];events={}
     LAST_LIVETV_PROBES.clear()
-    LAST_LIVETV_PROBES.update({'attempted':0,'fetched':0,'errors':0,'with_embeds':0,'with_media':0,'without_event_id':0,'error_types':{}})
+    LAST_LIVETV_PROBES.update({'attempted':0,'fetched':0,'errors':0,'with_embeds':0,'with_media':0,'without_event_id':0,'with_webplayer_text':0,'with_raw_webplayer_markup':0,'event_scoped_candidates':0,'error_types':{}})
     for url in ('https://livetv.sx/enx/allupcomingsports/1/', 'https://livetv.sx/', 'https://livetv.sx/allupcoming/'):
         try:
             for e in parse_livetv(get_url(url),url,assume_football=('/allupcomingsports/1/' in url)):events[e['id']]=e
@@ -367,7 +470,11 @@ def fetch_livetv():
                     parsed.feed(html.decode('cp1251','replace') if isinstance(html,bytes) and b'windows-1251' in html[:1500].lower() else (html.decode('utf-8','replace') if isinstance(html,bytes) else html))
                     LAST_LIVETV_PROBES['with_embeds']+=int(any('webplayer' in x.lower() for x in parsed.frames))
                     LAST_LIVETV_PROBES['with_media']+=int(bool(parsed.media))
-                    LAST_LIVETV_PROBES['without_event_id']+=int(bool(parsed.frames) and not event['players'])
+                    markup=summarize_player_markup(html,event['url'])
+                    LAST_LIVETV_PROBES['with_webplayer_text']+=markup['webplayer_text']
+                    LAST_LIVETV_PROBES['with_raw_webplayer_markup']+=int(markup['raw_webplayers']>0)
+                    LAST_LIVETV_PROBES['event_scoped_candidates']+=markup['event_scoped_candidates']
+                    LAST_LIVETV_PROBES['without_event_id']+=int(bool(markup['raw_webplayers']) and not event['players'])
                 except Exception as exc:
                     event['probe_status']='fetch_error'
                     event['players']=[]
@@ -429,6 +536,7 @@ def load_old():
 
 
 def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
+    CALENDAR_SOURCES.clear()
     now=now or utc_now();today=now.astimezone(TZ).date()
     begin=today-timedelta(days=1)
     end=today+timedelta(days=8)
@@ -456,7 +564,7 @@ def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
     try:channels=validated_channels()
     except (OSError,ValueError):channels=[]
     return {
-        'schema':1,'version':'1.1.2',
+        'schema':1,'version':'1.1.3',
         'updated_at':now.isoformat().replace('+00:00','Z'),
         'timezone':'Europe/Kyiv',
         'fixtures':fixture_results,
@@ -465,6 +573,7 @@ def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
         'channels':channels,
         'health':{'fixtures_ok':len(LEAGUES)-len(failed),'fixtures_total':len(LEAGUES),
                   'fixtures_fallback':bool(failed and not fixture_results),
+                  'calendar_sources':dict(CALENDAR_SOURCES),
                   'livetv_ok':not bool(live_errors),'livetv_errors':len(live_errors),
                   'livetv_note':'LiveTV: explicit public player embeds/video tags only; player availability unverified',
                   'livetv_player_probes':dict(LAST_LIVETV_PROBES),
