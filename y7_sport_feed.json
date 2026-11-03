@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "version": "1.0.0",
-  "updated_at": "2026-11-03T18:05:48.258297Z",
+  "version": "1.1.0",
+  "updated_at": "2026-11-03T18:08:31.450533Z",
   "timezone": "Europe/Kyiv",
   "fixtures": [
     {
@@ -33,7 +33,8 @@
       "playable": false,
       "browser_options": 7,
       "acestream_options": 4,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена"
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "399041287",
@@ -44,7 +45,8 @@
       "playable": false,
       "browser_options": 5,
       "acestream_options": 3,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена"
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "571148339",
@@ -55,7 +57,8 @@
       "playable": false,
       "browser_options": 0,
       "acestream_options": 1,
-      "player_info": "Опис варіантів на сторінці; робота не перевірена"
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "570717779",
@@ -63,7 +66,8 @@
       "url": "https://livetv.sx/eventinfo/570717779_esteglyal_tegeran_al_shamal/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "570517540",
@@ -71,7 +75,8 @@
       "url": "https://livetv.sx/eventinfo/570517540_istra_neretva/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "570516114",
@@ -79,7 +84,8 @@
       "url": "https://livetv.sx/eventinfo/570516114_al_husseyn_al_shorta/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "631211934",
@@ -87,7 +93,8 @@
       "url": "https://livetv.sx/eventinfo/631211934_ezero_dechich/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "626857424",
@@ -95,7 +102,11 @@
       "url": "https://livetv.sx/enx/eventinfo/626857424_dolphins_western_province/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "631211928",
@@ -103,7 +114,8 @@
       "url": "https://livetv.sx/eventinfo/631211928_ael_limasol_iraklis_gerolakkos/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "627152054",
@@ -111,7 +123,8 @@
       "url": "https://livetv.sx/enx/eventinfo/627152054_lokomotiv_zagreb_w_koka_w/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "628465237",
@@ -119,7 +132,11 @@
       "url": "https://livetv.sx/eventinfo/628465237_spartak_ks_volna/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 2,
+      "acestream_options": 2,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "630882547",
@@ -127,7 +144,11 @@
       "url": "https://livetv.sx/eventinfo/630882547_spartak_kostroma_volna/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 1,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "632096559",
@@ -135,7 +156,11 @@
       "url": "https://livetv.sx/eventinfo/632096559_lyngby_ranners/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "570718244",
@@ -143,7 +168,11 @@
       "url": "https://livetv.sx/eventinfo/570718244_hrobri_gloguv_arka_gdinya/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 1,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "570718245",
@@ -151,7 +180,11 @@
       "url": "https://livetv.sx/eventinfo/570718245_pogon_sedlce_ruh_hozhuv/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 0,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена",
+      "players": []
     },
     {
       "id": "570716540",
@@ -247,7 +280,8 @@
       "url": "https://livetv.sx/eventinfo/399041183__/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "399041189",
@@ -503,7 +537,8 @@
       "url": "https://livetv.sx/enx/eventinfo/576273681__/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "572293153",
@@ -575,7 +610,8 @@
       "url": "https://livetv.sx/enx/eventinfo/607359570_karpaty_u19_lviv_u19/",
       "sport": "football",
       "provider": "LiveTV",
-      "playable": false
+      "playable": false,
+      "players": []
     },
     {
       "id": "607359571",
@@ -843,10 +879,12 @@
     "fixtures_fallback": false,
     "livetv_ok": true,
     "livetv_errors": 0,
-    "livetv_note": "LiveTV provides event links only, not verified playable streams",
+    "livetv_note": "LiveTV: explicit public player embeds/video tags only; player availability unverified",
+    "livetv_players_found": 0,
+    "livetv_events_with_players": 0,
     "errors": [
-      "uefa.europa:HTTPError",
       "uefa.champions:HTTPError",
+      "uefa.europa:HTTPError",
       "uefa.europa.conf:HTTPError"
     ]
   }
