@@ -28,7 +28,7 @@ const testExports=`window.test={SafeTabs:SafeTabs,LivePlayer:LivePlayer,sportSet
  setPlayer:function(){playerRequest={title:'Match',choices:[{kind:'embed',url:'https://livetv.sx/webplayer2.php?t=tvope&c=23&eid=123&lid=77'}]};},
  setMemory:function(value){memory=value;},freshChannel:freshChannel,isPlayer:isPlayer,playStream:playStream,playOfficial:playOfficial,filterFixtures:filterFixtures};`;
 vm.runInNewContext(source.replace('    boot();',testExports+' boot();'),globals);
-assert.equal(globals.window.Y7Sport.version,'1.1.7');
+assert.equal(globals.window.Y7Sport.version,'1.1.8');
 assert.equal(menus,1);
 vm.runInNewContext(source,globals);assert.equal(menus,1,'double include');
 const gStart=game.indexOf('    var Y7_IDLE_LAST='),gEnd=game.indexOf('    function installGamesHeadIcon',gStart);

@@ -22,6 +22,12 @@ def fixture(league='ucl',status='scheduled',kickoff='2026-11-03T17:45:00Z'):
     return {'id':'f-'+league,'league':league,'home':'Shakhtar','away':'Sporting','kickoff':kickoff,'status':status,'important':True}
 
 class CalendarTests(unittest.TestCase):
+    def test_confirmed_finished_fixture_overrides_aggregator_live_claim(self):
+        f=fixture(status='finished');extra={'id':'pit:1','provider':'pit','title':'Shakhtar Donetsk vs Sporting CP','status':'live','kickoff':f['kickoff'],'sources':[]}
+        def provider(slug,*args):return [f] if slug=='uefa.champions' else []
+        with patch.object(m,'load_old',return_value={}),patch.object(m,'validated_channels',return_value=[]):
+            data=m.build(NOW,provider,lambda:([],[]),lambda:[],lambda now:[],lambda *args:([extra],[],{}))
+        self.assertEqual(data['events'][0]['status'],'finished')
     def test_uefa_match_status_country_score_and_source(self):
         e=event(status='FINISHED');e['score']={'total':{'home':0,'away':1}}
         f=m.event_from_uefa(e,'uefa.champions',2027)
@@ -56,7 +62,7 @@ class CalendarTests(unittest.TestCase):
             if slug=='uefa.europa.conf':raise OSError('offline')
             return [fixture(m.LEAGUES[slug][0])]
         with patch.object(m,'load_old',return_value=old),patch.object(m,'validated_channels',return_value=[]):
-            data=m.build(NOW,provider,lambda:([],[]),lambda:[],lambda now:[])
+            data=m.build(NOW,provider,lambda:([],[]),lambda:[],lambda now:[],lambda *args:([],[],{}))
         cached=next(x for x in data['fixtures'] if x['league']=='uecl')
         self.assertTrue(cached['stale']);self.assertEqual(cached['checked_at'],'2026-11-03T23:00:00Z')
         self.assertEqual(data['health']['fixtures_ok'],2);self.assertTrue(data['health']['fixtures_fallback'])
@@ -65,10 +71,14 @@ class CalendarTests(unittest.TestCase):
         old={'updated_at':(NOW-timedelta(days=3)).isoformat(),'fixtures':[fixture()],'livetv':[]}
         def fail(*args):raise OSError('offline')
         with patch.object(m,'load_old',return_value=old),patch.object(m,'validated_channels',return_value=[]):
-            data=m.build(NOW,fail,lambda:([],['offline']),lambda:[],lambda now:[])
+            data=m.build(NOW,fail,lambda:([],['offline']),lambda:[],lambda now:[],lambda *args:([],[],{}))
         self.assertEqual(data['fixtures'],[]);self.assertEqual(data['health']['fixtures_ok'],0)
 
 class LiveTVTests(unittest.TestCase):
+    def test_champions_league_does_not_turn_basketball_into_football(self):
+        html='<img alt="Баскетбол. Ліга Чемпіонів ФІБА"><a href="/ua/eventinfo/123_a/">Порту — Ховентуд</a><img alt="Волейбол"><a href="/ua/eventinfo/124_b/">Гояс — Мінас</a><img alt="Футбол. Ліга Чемпіонів"><a href="/ua/eventinfo/125_c/">Барселона — Астон Вілла</a>'
+        events=m.parse_livetv(html)
+        self.assertEqual([e['sport'] for e in events],['basketball','volleyball','football'])
     url='https://livetv.sx/ua/eventinfo/123_match/'
     def test_real_webplayer_href_discovered_without_js_execution(self):
         html='<a href="/webplayer2.php?t=alieztv&amp;c=232749&amp;lang=ua&amp;eid=123&amp;lid=77&amp;ci=7&amp;si=1" onclick="window.open(this.href)">Play</a>'

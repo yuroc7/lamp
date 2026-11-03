@@ -1,0 +1,24 @@
+<!doctype html><html lang="uk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Y7 Sport 1.1.8 — стенд інтерфейсу</title>
+<style>html,body,#app{margin:0;height:100%;font:18px Arial;background:#0e1722;color:white}#banner{font-size:12px;padding:5px 15px;background:#374550}#app{height:calc(100% - 24px)}.scroll{height:100%;overflow:auto}dialog{color:white;background:#172738;border:1px solid #527461;border-radius:14px;width:min(650px,85vw);max-height:80vh}dialog::backdrop{background:#000b}dialog button{display:block;width:100%;text-align:left;background:#203949;color:white;border:1px solid #54756d;border-radius:8px;margin:8px 0;padding:15px;font-size:18px}dialog small{display:block;color:#b9cad5;margin-top:7px}#noty{position:fixed;bottom:20px;left:10%;right:10%;background:#326048;padding:15px;display:none}button{cursor:pointer}.y7s-row>div:first-child{min-width:0}.y7s-name{overflow-wrap:anywhere}@media(max-width:600px){body{font-size:14px}.y7s-content{padding:1em!important}.y7s-titlebar{font-size:1.7em!important}.y7s-row{gap:.5em!important}}</style>
+<div id="banner">Браузерний стенд справжнього плагіна · Lampa API змодельовано · це не тест LG</div><div id="app"></div><dialog id="select"></dialog><div id="noty"></div>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+var components={},controllers={},current='',activity,playerClose=[],notyTimer;
+window.Lampa={
+ Component:{add:function(id,Type){components[id]=Type;}},
+ Storage:{get:function(k,d){var v=sessionStorage.getItem(k);return v===null?d:JSON.parse(v);},set:function(k,v){sessionStorage.setItem(k,JSON.stringify(v));}},
+ Noty:{show:function(s){$('#noty').text(s).show();clearTimeout(notyTimer);notyTimer=setTimeout(function(){$('#noty').hide();},5000);}},
+ Scroll:function(){var box=$('<div class="scroll"></div>');this.append=function(v){box.append(v);};this.render=function(){return box;};this.update=function(){};this.destroy=function(){box.remove();};},
+ Activity:{push:function(p){if(activity&&activity.destroy)activity.destroy();activity=new components[p.component]();activity.activity={loader:function(){}};$('#app').empty().append(activity.create());activity.start();},backward:function(){Lampa.Noty.show('Назад у Lampa (стенд)');}},
+ Controller:{remove:function(k){delete controllers[k];},add:function(k,v){controllers[k]=v;},toggle:function(k){current=k;if(controllers[k]&&controllers[k].toggle)controllers[k].toggle();},collectionSet:function(){},collectionFocus:function(el){$('.focus').removeClass('focus');if(el)$(el).addClass('focus').trigger('hover:focus');}},
+ Select:{show:function(params){var d=$('#select').empty();d.append($('<h3>').text(params.title));params.items.forEach(function(item){var b=$('<button>').text(item.title);if(item.subtitle)b.append($('<small>').text(item.subtitle));b.on('click',function(){params.onSelect(item);});d.append(b);});d.append($('<button>').text('Назад').on('click',function(){if(params.onBack)params.onBack();}));d[0].onkeydown=function(e){if(e.key==='Escape'){e.preventDefault();if(params.onBack)params.onBack();}};if(!d[0].open)d[0].showModal();},close:function(){document.getElementById('select').close();}},
+ Input:{edit:function(params,cb){var s=prompt(params.title,params.value);if(s!==null)cb(s);}},
+ Player:{opened:function(){return false;},listener:{follow:function(k,fn){if(k==='close')playerClose.push(fn);}},play:function(item){
+   fetch(item.url).then(function(r){return r.text();}).then(function(text){Lampa.Select.show({title:'Передано у внутрішній Player · '+item.title,items:[{title:text.indexOf('#EXTM3U')===0?'HLS отриманий через Bridge':'Помилка HLS'}],onSelect:function(){Lampa.Select.close();playerClose.forEach(function(fn){fn();});},onBack:function(){Lampa.Select.close();playerClose.forEach(function(fn){fn();});}});});
+ }}
+};
+window.Navigator={move:function(direction){var nodes=$('#app .selector'),i=nodes.index($('.focus'));i+=(direction==='up'||direction==='left')?-1:1;var target=nodes[(i+nodes.length)%nodes.length];Lampa.Controller.collectionFocus(target);if(target)target.scrollIntoView({block:'nearest'});}};
+document.addEventListener('keydown',function(e){if(document.getElementById('select').open)return;var c=controllers[current];if(!c)return;var k={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Enter:'enter',Escape:'back'}[e.key];if(k&&c[k]){e.preventDefault();c[k]();}});
+var rawOpen=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(method,url){if(String(url).indexOf('https://yuroc7.github.io/lamp/y7_sport_feed.json')===0)url='/y7_sport_feed.json';return rawOpen.call(this,method,url,true);};
+</script><script src="/preview-config.js"></script><script src="/y7_sport.js"></script><script>Y7Sport.open();</script></html>

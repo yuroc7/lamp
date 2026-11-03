@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Y7 Sport feed builder v1.1.7.
+"""Y7 Sport feed builder v1.1.8.
 
 Public fixture metadata (ESPN), LiveTV event navigation, and detection of explicitly
 published video tags and LiveTV single-event embed players. No DRM/paywall/ad
@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from sport_streams import validate_channel
+from sport_sources import EXTRA_HOSTS, PROVIDERS, fetch_extra, p2p_links, identities, matches, add_livetv, iso, sport_key
 import re
 import urllib.parse
 import ipaddress
@@ -38,9 +39,10 @@ UA_TERMS = re.compile(r'(?iu)(shakhtar|shahtar|шахт[еа]р|донецьк|d
 EVENT_ID = re.compile(r'/eventinfo/(\d+)(?:_[^/?#]*)?/?', re.I)
 TAG = re.compile(r'<[^>]+>')
 FOOTBALL = re.compile(r'(?iu)\b(?:football|soccer|футбол|liga champions|лига чемпионов|ліга чемпіонів)\b')
-OTHER_SPORT = re.compile(r'(?iu)\b(?:hockey|хоккей|tennis|теннис|basketball|баскетбол|volleyball|волейбол|mma|мма|бокс|boxing|snooker|снукер|baseball|бейcбол)\b')
+OTHER_SPORT = re.compile(r'(?iu)\b(?:hockey|хоккей|хокей|tennis|теннис|теніс|basketball|баскетбол|volleyball|волейбол|mma|мма|бокс|boxing|snooker|снукер|baseball|бейcбол)\b')
 TIMEOUT = 14
 ALLOWED_UPSTREAM = {'livetv.sx','www.livetv.sx','site.api.espn.com','cdn.espn.com','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me','www.thesportsdb.com','match.uefa.com','suspilne.media','www.youtube.com','youtube.com'}
+ALLOWED_UPSTREAM.update(EXTRA_HOSTS)
 
 class SafeRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -379,7 +381,9 @@ class LiveTVLinks(HTMLParser):
     def handle_starttag(self,tag,attrs):
         a=dict(attrs)
         if tag=='img':
-            self.last_image_alt=str(a.get('alt',''))[:150]
+            hint=str(a.get('alt',''))[:150]
+            # Generic play/rating/flag icons must not erase the sport context.
+            if FOOTBALL.search(hint) or OTHER_SPORT.search(hint):self.last_image_alt=hint
         if tag=='a':
             href=a.get('href','')
             match=EVENT_ID.search(str(href))
@@ -438,13 +442,13 @@ def parse_livetv(html,base='https://livetv.sx/',assume_football=False):
         if len(title)<4 or len(title)>140:continue
         # Football fixture link only. Remove ambiguous stream pages and betting links.
         if not (' – ' in title or ' — ' in title or ' - ' in title or ' vs ' in title.lower()):continue
-        if OTHER_SPORT.search(hint) and not FOOTBALL.search(hint):continue
-        if not assume_football and not FOOTBALL.search(hint) and not re.search(r'(?iu)(shakhtar|sporting|шахт[еа]р|спортинг|atletico|атлетико|бавария|uefa|barcelona|барселона|реал|манчестер)',title):continue
+        sport=sport_key(hint) if OTHER_SPORT.search(hint) else 'football'
+        if not OTHER_SPORT.search(hint) and not assume_football and not FOOTBALL.search(hint) and not re.search(r'(?iu)(shakhtar|sporting|шахт[еа]р|спортинг|atletico|атлетико|бавария|uefa|barcelona|барселона|реал|манчестер)',title):continue
         url=urllib.parse.urljoin(base,it['href']).split('#')[0]
         u=urllib.parse.urlparse(url)
         if u.scheme!='https' or u.hostname not in ('livetv.sx','www.livetv.sx','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me'):continue
         if not EVENT_ID.search(u.path):continue
-        good[it['id']]={'id':it['id'],'title':title,'url':livetv_ukrainian_url(url),'sport':'football','provider':'LiveTV','playable':False,'competition':infer_livetv_competition(hint)}
+        good[it['id']]={'id':it['id'],'title':title,'url':livetv_ukrainian_url(url),'sport':sport,'provider':'LiveTV','playable':False,'competition':infer_livetv_competition(hint) if sport=='football' else unescape(it['sport_hint'])}
     return list(good.values())
 
 
@@ -622,7 +626,7 @@ def fetch_livetv():
                 events.setdefault(e['id'],e)  # Ukrainian labels and URLs are preferred
         except Exception as exc:
             errors.append(type(exc).__name__)
-    listed=list(events.values())[:MAX_LIVETV]
+    listed=sorted(events.values(),key=lambda e:(e.get('sport')!='football',not bool(UA_TERMS.search(e['title']))))[:MAX_LIVETV]
     # Fetch event pages and detect only explicit player embed codes or media tags.
     # Budget is limited to avoid overloading upstream and GitHub Actions timeouts.
     priority=sorted(listed,key=lambda e:(0 if UA_TERMS.search(e['title']) else 1,0 if re.search(r'(?iu)(champions|чемпионов|чемпіонів|барселона|sporting|спoртинг)',e['title']) else 1))[:MAX_PLAYER_PROBES]
@@ -637,6 +641,18 @@ def fetch_livetv():
                     LAST_LIVETV_PROBES['fetched']+=1
                     event.update(probe_livetv_player_descriptions(html))
                     event['players']=extract_public_players(html,event['url'])
+                    event['p2p']=p2p_links(html,event['id'])
+                    # Literal publisher JSON-LD supplies a date for cross-source
+                    # matching; it does not supply or validate a video stream.
+                    for block in re.findall(r'<script[^>]+type=[\"\x27]application/ld\+json[\"\x27][^>]*>(.*?)</script>',_decode_public_html(html),re.I|re.S):
+                        try:
+                            doc=json.loads(block)
+                            if isinstance(doc,dict):
+                                info=doc.get('publication') if isinstance(doc.get('publication'),dict) else doc
+                                stamp=iso(info.get('startDate'));ending=iso(info.get('endDate'))
+                                if stamp:event['kickoff']=stamp
+                                if ending:event['ends_at']=ending
+                        except (ValueError,TypeError):pass
                     event['checked_at']=utc_now().isoformat().replace('+00:00','Z')
                     event['playable']=False  # discovery is not playback validation or a rights grant
                     # Debug metrics: no URLs, cookies, query values, or HTML are retained.
@@ -712,7 +728,7 @@ def load_old():
     except (ValueError,OSError):return {}
 
 
-def build(now=None, espn_fn=None, livetv_fn=fetch_livetv, official_fn=official_embeds, youtube_fn=fetch_official_live):
+def build(now=None, espn_fn=None, livetv_fn=fetch_livetv, official_fn=official_embeds, youtube_fn=fetch_official_live, extra_fn=fetch_extra):
     CALENDAR_SOURCES.clear()
     CALENDAR_DETAILS.clear()
     now=now or utc_now();today=now.astimezone(TZ).date()
@@ -754,10 +770,22 @@ def build(now=None, espn_fn=None, livetv_fn=fetch_livetv, official_fn=official_e
         kickoff=datetime.fromisoformat(item['kickoff'].replace('Z','+00:00'))
         if item.get('status') in ('scheduled','live') and kickoff<now-timedelta(hours=4):item['status']='unknown'
     fixture_results=merge_fixtures(fixture_results,today)
+    try:extra_events,extra_channels,provider_health=extra_fn(get_url,now)
+    except Exception as exc:extra_events=[];extra_channels=[];provider_health={'all':{'status':'error','error_type':type(exc).__name__}}
+    combined=add_livetv(live_events,now)+extra_events
+    provider_health['livetv']={'status':'ok' if live_events else 'error' if live_errors else 'empty',
+                             'events':len(live_events),'channels':0,'checked_at':iso(now.isoformat())}
+    for fixture in fixture_results:
+        identities(fixture)
+        fixture['related_events']=[event['id'] for event in combined if matches(fixture,event)]
+        if not fixture.get('stale') and fixture.get('status') in ('finished','cancelled','postponed'):
+            for event in combined:
+                if event['id'] in fixture['related_events']:event['status']=fixture['status']
+    for event in combined:identities(event)
     try:channels=validated_channels(now)
     except (OSError,ValueError):channels=[]
     return {
-        'schema':1,'version':'1.1.7',
+        'schema':1,'version':'1.1.8',
         'updated_at':now.isoformat().replace('+00:00','Z'),
         'timezone':'Europe/Kyiv',
         'fixtures':fixture_results,
@@ -767,6 +795,9 @@ def build(now=None, espn_fn=None, livetv_fn=fetch_livetv, official_fn=official_e
         'official_embeds':official_fn(),
         'official_live':youtube_fn(now),
         'channels':channels,
+        'events':combined,
+        'aggregator_channels':extra_channels,
+        'providers':[dict(p,**provider_health.get(p['id'],{'status':'ok' if p['id']=='livetv' and live_events else 'empty'})) for p in PROVIDERS],
         'health':{'fixtures_ok':len(LEAGUES)-len(failed),'fixtures_total':len(LEAGUES),
                   'fixtures_fallback':bool(cached_leagues),
                   'calendar_cached_leagues':sorted(set(cached_leagues)),
@@ -780,6 +811,8 @@ def build(now=None, espn_fn=None, livetv_fn=fetch_livetv, official_fn=official_e
                   'livetv_player_probes':dict(LAST_LIVETV_PROBES),
                   'livetv_players_found':sum(len(e.get('players') or []) for e in live_events),
                   'livetv_events_with_players':sum(bool(e.get('players')) for e in live_events),
+                  'p2p_sources':sum(len(e.get('p2p') or []) for e in live_events),
+                  'provider_health':provider_health,
                   'errors':(failed+live_errors)[:7]}
     }
 

@@ -8,6 +8,7 @@ on:
       - 'y7_game.js'
       - 'scripts/**'
       - 'tests/**'
+      - 'server/**'
       - 'requirements.txt'
       - 'sport_channels.json'
       - '.github/workflows/y7_sport_feed.yml'
@@ -40,6 +41,7 @@ jobs:
           node --check y7_sport.js
           node --check y7_game.js
           node tests/test_lifecycle.cjs
+          node tests/test_native_sources.cjs
       - name: Refresh video sources and schedules
         run: python scripts/update_y7_sport_feed.py
       - name: Validate public feed
