@@ -91,6 +91,21 @@ class LiveTVTests(unittest.TestCase):
         self.assertEqual(got[0]['kind'],'direct');self.assertFalse(got[0]['verified']);self.assertNotIn('authorized',got[0])
 
 class OfficialLiveTests(unittest.TestCase):
+    def test_official_embed_reference_survives_metadata_outage(self):
+        with patch.object(m,'get_url',side_effect=OSError('offline')):
+            result=m.official_embeds()
+        self.assertEqual(len(result),1)
+        self.assertEqual(result[0]['kind'],'embed')
+        self.assertEqual(result[0]['probe_status'],'unavailable')
+        self.assertNotIn('verified',result[0])
+    def test_official_embed_probe_confirms_only_exact_broadcaster_url(self):
+        html=b'<iframe src="https://gw-suspilne-sport.cosmonova-broadcast.tv/player"></iframe>'
+        with patch.object(m,'get_url',return_value=html):
+            self.assertEqual(m.official_embeds()[0]['probe_status'],'published_on_broadcaster_page')
+        with patch.object(m,'get_url',return_value=b'<iframe src="https://ads.example/player"></iframe>'):
+            result=m.official_embeds()
+        self.assertEqual(result[0]['probe_status'],'markup_changed')
+        self.assertNotIn('ads.example',result[0]['url'])
     def document(self,**changes):
         data={'playabilityStatus':{'status':'OK','playableInEmbed':True},
               'videoDetails':{'videoId':'abcdefghijk','channelId':m.YOUTUBE_CHANNELS[-1][2],'title':'Official live'},

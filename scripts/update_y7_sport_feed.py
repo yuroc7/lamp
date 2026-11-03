@@ -90,14 +90,21 @@ def official_embeds():
     """
     page='https://suspilne.media/sport/schedule/tv/'
     target='https://gw-suspilne-sport.cosmonova-broadcast.tv/player'
+    # This exact public embed was verified on the broadcaster's page on
+    # 2026-11-03. Keep its catalog reference through metadata-fetch outages;
+    # do not turn a failed probe into a claim of working video.
+    entry={'id':'suspilne-official','name':'Суспільне Спорт · офіційний плеєр','cost':'free',
+           'kind':'embed','url':target,'source_page':page,'provider':'Суспільне',
+           'probe_status':'unavailable',
+           'note':'Офіційний iframe мовника; доступність ефіру зараз не підтверджена. Геоправа та реклама мовника діють. Це не HLS.'}
     try:
         parser=PublicPlayers();parser.feed(get_url(page).decode('utf-8','replace'))
         if target in parser.frames:
-            return [{'id':'suspilne-official','name':'Суспільне Спорт · офіційний плеєр','cost':'free',
-                     'kind':'embed','url':target,'source_page':page,'provider':'Суспільне',
-                     'note':'Офіційний iframe телеканалу; геоправа та реклама мовника діють. Це не прямий HLS.'}]
+            entry['probe_status']='published_on_broadcaster_page'
+            entry['note']='Офіційний iframe телеканалу; геоправа та реклама мовника діють. Це не прямий HLS.'
+        else:entry['probe_status']='markup_changed'
     except Exception:pass
-    return []
+    return [entry]
 
 # Channel identities linked by the broadcasters themselves. Never use search
 # results, fan reuploads, signed Google Video URLs or YouTube cipher extraction.
