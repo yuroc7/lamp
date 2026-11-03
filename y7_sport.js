@@ -1,5 +1,5 @@
 /*
- * Y7 SPORT / Football First 1.1.3
+ * Y7 SPORT / Football First 1.1.4
  * Separate Lampa / LG webOS extension: no changes to 1.js, Lampac or Y7 Gateway.
  * Uses static, automatically refreshed public match metadata from GitHub Pages.
  * LiveTV: embedded single-event player where provided, plus explicitly public video tags.
@@ -7,15 +7,17 @@
  */
 (function(){
     'use strict';
-    var VERSION='1.1.3',KEY='__Y7_SPORT_FOOTBALL_113__';
+    var VERSION='1.1.4',KEY='__Y7_SPORT_FOOTBALL_114__';
     if(window[KEY])return;
     window[KEY]=true;
-    var COMPONENT='y7_sport_113',CTRL='y7_sport_113_ctrl';
-    var PLAYER_COMPONENT='y7_sport_live_player_113',PLAYER_CTRL='y7_sport_live_player_ctrl_113';
+    var COMPONENT='y7_sport_114',CTRL='y7_sport_114_ctrl';
+    var PLAYER_COMPONENT='y7_sport_live_player_114',PLAYER_CTRL='y7_sport_live_player_ctrl_114';
+    var SAFE_COMPONENT='y7_sport_safe_tabs_114',SAFE_CTRL='y7_sport_safe_tabs_ctrl_114';
+    var SAFE_TABS=[],SAFE_ACTIVE=0;
     var playerRequest=null;
     var BASE='https://yuroc7.github.io/lamp/';
     var FEED=BASE+'y7_sport_feed.json';
-    var STORE='y7_sport_feed_113';
+    var STORE='y7_sport_feed_114';
     var ICON='<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 7l3 3M19 7l-3 3M6 17l3-2M18 17l-3-2"/></svg>';
     var SERVICES=[
         {id:'suspilne',name:'Суспільне Спорт',category:'ua',cost:'free',url:'https://suspilne.media/sport/schedule/live/',note:'Українські безкоштовні трансляції; доступність конкретних подій залежить від прав.'},
@@ -105,7 +107,7 @@
         return mins>60?'Дані застарілі · '+Math.floor(mins/60)+' год тому':'Оновлено '+mins+' хв тому';
     }
     function style(){
-        if(document.getElementById('y7-sport-style-113'))return;
+        if(document.getElementById('y7-sport-style-114'))return;
         var css='.y7s-root{height:100%;width:100%;background:#0e1722;color:#fff;overflow:hidden}'+
         '.y7s-content{padding:2em 2.7em 6em;max-width:1450px;margin:auto}'+
         '.y7s-hero{border:1px solid #366253;border-radius:1em;background:linear-gradient(100deg,#175138,#19273e);padding:1.5em;margin-bottom:1.2em}'+
@@ -124,11 +126,21 @@
         '.y7s-play-frame iframe{display:block;width:100%;height:100%;border:0;background:#000}'+
         '.y7s-play-tip{padding:.55em 1em;background:#16293b;color:#b9cad5;font-size:.8em}'+
         '.y7s-action{display:inline-block;border:1px solid #3d6875;padding:.55em 1em;margin:.1em .3em;border-radius:.5em;background:#27404d;cursor:pointer}'+
-        '.y7s-action.focus,.y7s-action:hover{background:#268459;border-color:#a7ffbf}';
-        var n=document.createElement('style');n.id='y7-sport-style-113';n.textContent=css;
+        '.y7s-action.focus,.y7s-action:hover{background:#268459;border-color:#a7ffbf}'+
+        '.y7s-tabs-root{display:flex;flex-direction:column;width:100%;height:100%;background:#0b1824;color:#fff}'+
+        '.y7s-tabs-h{flex:0 0 auto;background:#1c3041;border-bottom:2px solid #3a5c62;padding:.5em .8em;display:flex;flex-wrap:wrap;align-items:center;gap:.4em}'+
+        '.y7s-browser-tab{cursor:pointer;display:inline-block;border-radius:.6em .6em 0 0;background:#263b4d;padding:.55em .75em;border:1px solid #537183;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+        '.y7s-browser-tab.active,.y7s-browser-tab.focus,.y7s-browser-tab:hover{background:#21845f;border-color:#adf6ce}'+
+        '.y7s-tabs-actions{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:.4em;background:#122b35;padding:.4em .8em}'+
+        '.y7s-tabs-action{cursor:pointer;border:1px solid #5a8a82;border-radius:.5em;padding:.55em .75em;background:#294958}'+
+        '.y7s-tabs-action.focus,.y7s-tabs-action:hover{background:#21845f;border-color:#adf6ce}'+
+        '.y7s-tabs-view{position:relative;flex:1;min-height:40vh;background:#05090f}'+
+        '.y7s-tabs-view iframe{display:block;position:absolute;inset:0;width:100%;height:100%;border:0;background:#05090f}'+
+        '.y7s-tabs-cover{flex:0 0 auto;background:#2b423d;border-top:1px solid #709b8e;padding:.45em .8em;font-size:.85em}';
+        var n=document.createElement('style');n.id='y7-sport-style-114';n.textContent=css;
         (document.head||document.documentElement).appendChild(n);
     }
-    function qr(url,title){
+    function qr(url,title,returnCtrl){
         url=safeUrl(url);if(!url)return notify('некоректне посилання');
         try{
             var overlay=$('<div class="y7s-qr"></div>'),card=$('<div class="y7s-card"></div>');
@@ -139,25 +151,116 @@
             overlay.append(card);$('body').append(overlay);
             try{if(window.Y7QRCode)new window.Y7QRCode(holder[0],{text:url,width:220,height:220,correctLevel:window.Y7QRCode.CorrectLevel.M});
             else holder.text(url);}catch(e){holder.text(url);}
-            function close(){document.removeEventListener('keydown',key,true);overlay.remove();try{Lampa.Controller.toggle(CTRL);}catch(e){}}
+            function close(){document.removeEventListener('keydown',key,true);overlay.remove();try{Lampa.Controller.toggle(returnCtrl||CTRL);}catch(e){}}
             function key(e){var k=e.keyCode;if(k===13||k===27||k===461||e.key==='Escape'||e.key==='Backspace'){e.preventDefault();e.stopPropagation();close();}}
             document.addEventListener('keydown',key,true);
             overlay.on('click',function(e){e.preventDefault();close();});
         }catch(e){notify('не вдалося відкрити QR');}
     }
+    // Open third-party pages ONLY in the sandboxed Y7 tab viewer.
+    // Never call native external-browser calls: on webOS these create native
+    // browser windows that the Lampa plugin cannot close or enumerate.
+    function addSafeTab(url,title){
+        url=safeUrl(url);if(!url)return notify('Некоректна URL');
+        var i=-1;
+        SAFE_TABS.forEach(function(t,j){if(t.url===url)i=j;});
+        if(i<0){
+            SAFE_TABS.push({url:url,title:String(title||'Сторінка').slice(0,65)});
+            if(SAFE_TABS.length>6)SAFE_TABS.shift();
+            i=SAFE_TABS.length-1;
+        }
+        SAFE_ACTIVE=i;
+        try{Lampa.Activity.push({url:'y7://sport/safe-tabs/1.1.4',title:'Y7 Спорт · Вкладки',component:SAFE_COMPONENT,page:1});}
+        catch(e){notify('Не вдалося відкрити вкладки; використовуй QR');qr(url,title);}
+    }
     function openExternal(url,title){
         url=safeUrl(url);if(!url)return notify('немає коректної адреси');
-        var list=[{title:'Відкрити на TV',value:'tv'},{title:'Показати QR для телефона',value:'qr'}];
-        function picked(item){
-            try{Lampa.Select.close();}catch(e){}
-            if(!item||item.value==='qr')return qr(url,title);
-            var ok=false;
-            try{if(Lampa.Utils&&Lampa.Utils.openURL){Lampa.Utils.openURL(url);ok=true;}}catch(e){}
-            if(!ok){try{window.open(url,'_blank');ok=true;}catch(e){}}
-            if(!ok)qr(url,title);
+        var items=[
+            {title:'Вкладка Y7 у Lampa · без нових рекламних вікон',value:'tab'},
+            {title:'QR для телефона · якщо сайт не дозволяє iframe',value:'qr'}
+        ];
+        try{Lampa.Select.show({title:title||'Відкрити',items:items,
+            onSelect:function(item){
+                try{Lampa.Select.close();}catch(e){}
+                if(item&&item.value==='tab')addSafeTab(url,title);
+                else qr(url,title);
+            },onBack:function(){try{Lampa.Controller.toggle(CTRL);}catch(e){}}
+        });}catch(e){addSafeTab(url,title);}
+    }
+    function SafeTabs(){
+        var self=this,dead=false,current=SAFE_ACTIVE,last=null,frame=null;
+        var root=$('<div class="y7s-tabs-root"></div>'),head=$('<div class="y7s-tabs-h"></div>'),actions=$('<div class="y7s-tabs-actions"></div>'),
+            view=$('<div class="y7s-tabs-view"></div>'),foot=$('<div class="y7s-tabs-cover"></div>');
+        function focus(b){last=b[0];}
+        function control(parent,label,callback,cls){
+            var b=$('<div class="selector '+(cls||'y7s-tabs-action')+'"></div>').text(label);
+            b.on('hover:focus',function(){focus(b);});
+            b.on('hover:enter click',function(e){try{e.preventDefault();e.stopPropagation();}catch(_){}callback();return false;});
+            parent.append(b);return b;
         }
-        try{Lampa.Select.show({title:title||'Відкрити',items:list,onSelect:picked,onBack:function(){Lampa.Controller.toggle(CTRL);}});}
-        catch(e){qr(url,title);}
+        function dropFrame(){
+            if(frame){try{frame.src='about:blank';}catch(e){}try{frame.remove();}catch(e2){}frame=null;}
+        }
+        function load(){
+            if(dead)return;
+            if(current>=SAFE_TABS.length)current=Math.max(0,SAFE_TABS.length-1);
+            SAFE_ACTIVE=current;
+            dropFrame();head.empty();
+            head.append($('<span style="font-weight:800;padding-right:.6em"></span>').text('Y7 · Вкладки'));
+            SAFE_TABS.forEach(function(t,i){
+                var b=control(head,(i+1)+'. '+t.title,function(){current=i;load();},'y7s-browser-tab');
+                if(i===current)b.addClass('active');
+            });
+            if(!SAFE_TABS.length){foot.text('Немає вкладок. Натисни Назад.');return;}
+            var active=SAFE_TABS[current];
+            frame=document.createElement('iframe');
+            // No allow-popups, allow-top-navigation, allow-modals or downloads.
+            // Ad popunders and attempts to navigate the native LG browser are blocked.
+            frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-presentation');
+            frame.setAttribute('allow','autoplay; fullscreen; picture-in-picture');
+            frame.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
+            frame.setAttribute('title',active.title);
+            frame.src=active.url;
+            view.append(frame);
+            foot.text('Пульт: керування кнопками зверху. Рекламні pop-up заблоковані. Якщо сайт не відкривається — QR. ✕ Закрити вкладку або Вийти у Y7.');
+            try{Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(last||root.find('.selector')[0],root);}catch(e){}
+        }
+        function exit(){try{Lampa.Controller.remove(SAFE_CTRL);}catch(e){}try{Lampa.Activity.backward();}catch(e2){}}
+        function closeTab(){
+            if(!SAFE_TABS.length)return exit();
+            SAFE_TABS.splice(current,1);
+            if(!SAFE_TABS.length){dropFrame();return exit();}
+            current=Math.min(current,SAFE_TABS.length-1);load();
+        }
+        function refresh(){load();}
+        this.create=function(){
+            style();
+            control(actions,'↻ Оновити',refresh);
+            control(actions,'✕ Закрити вкладку',closeTab);
+            control(actions,'QR',function(){var t=SAFE_TABS[current];if(t)qr(t.url,t.title,SAFE_CTRL);});
+            control(actions,'⬅ Вийти у Y7',exit);
+            root.append(head).append(actions).append(view).append(foot);load();
+            try{this.activity.loader(false);}catch(e){}return root;
+        };
+        this.render=function(){return root;};
+        this.start=function(){
+            try{Lampa.Controller.remove(SAFE_CTRL);}catch(e){}
+            Lampa.Controller.add(SAFE_CTRL,{
+                toggle:function(){try{Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(last||root.find('.selector')[0],root);}catch(e){}},
+                up:function(){try{Navigator.move('up');}catch(e){}},
+                down:function(){try{Navigator.move('down');}catch(e){}},
+                left:function(){try{Navigator.move('left');}catch(e){}},
+                right:function(){try{Navigator.move('right');}catch(e){}},
+                enter:function(){var b=root.find('.selector.focus').first();if(b.length)b.trigger('hover:enter');},
+                ok:function(){var b=root.find('.selector.focus').first();if(b.length)b.trigger('hover:enter');},
+                back:exit
+            });
+            Lampa.Controller.toggle(SAFE_CTRL);
+        };
+        this.back=exit;
+        this.pause=function(){try{Lampa.Controller.remove(SAFE_CTRL);}catch(e){}};
+        this.stop=this.pause;
+        this.destroy=function(){dead=true;dropFrame();try{Lampa.Controller.remove(SAFE_CTRL);}catch(e){}root.remove();};
     }
     function options(title,items){
         items=items.filter(function(v){return safeUrl(v.url);});
@@ -177,7 +280,7 @@
         choices=(choices||[]).filter(function(x){return isPlayer(x)&&x.kind==='embed';});
         if(!choices.length)return notify('Вбудований плеєр не знайдено');
         playerRequest={title:title,choices:choices,start:Math.max(0,start||0)};
-        try{Lampa.Activity.push({url:'y7://sport/live/1.1.3',title:title,component:PLAYER_COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/live/1.1.4',title:title,component:PLAYER_COMPONENT,page:1});}
         catch(e){notify('Не вдалося відкрити плеєр');}
     }
     function LivePlayer(){
@@ -242,7 +345,8 @@
             var name=p.kind==='direct'?'▶ Відеопотік '+(i+1):'▶ Плеєр LiveTV '+(i+1)+' · всередині Lampa';
             choices.push({label:name,kind:p.kind,url:p.url,play:p.kind==='direct'});
         });
-        choices.push({label:'Сторінка LiveTV · тільки QR для телефона',kind:'qr',url:event.url});
+        choices.push({label:'Сторінка LiveTV · вкладка Y7 (pop-up заблоковані; реклама в сторінці можлива)',kind:'safe',url:event.url});
+        choices.push({label:'Сторінка LiveTV · QR для телефона',kind:'qr',url:event.url});
         if(!available.length)notify('Прямого відео поки не виявлено. Сторінка LiveTV — лише вручну.');
         try{
             Lampa.Select.show({title:title,
@@ -254,6 +358,7 @@
                     if(c.kind==='direct')return playStream(c.url,title);
                     if(c.kind==='embed')return showEmbedded(title,available.filter(function(p){return p.kind==='embed';}),available.filter(function(p){return p.kind==='embed';}).findIndex(function(p){return p.url===c.url;}));
                     if(c.kind==='qr')return qr(c.url,'LiveTV · сторінка матчу (телефон)');
+                    if(c.kind==='safe')return addSafeTab(c.url,title);
                     return openExternal(c.url,'LiveTV · зовнішній сайт із рекламою');
                 },onBack:function(){Lampa.Controller.toggle(CTRL);}
             });
@@ -350,7 +455,7 @@
                 row('LiveTV · футбольний календар','Матчі, зовнішні сторінки з посиланнями. Не гарантія прямого відео.','СТОРІНКИ',function(){changeTab('livetv');});
             }else if(tab==='livetv'){
                 section('LiveTV · можливі плеєри всередині Lampa');
-                row('Як працюють плеєри','Без переходу на рекламну сторінку. Вбудовані плеєри лише за наявності опублікованого коду; нові вкладки заблоковані.','ІНФО',function(){notify('Вбудований плеєр може містити власну рекламу або бути заблокований');});
+                row('Як працюють плеєри','Окремий плеєр, якщо він є. Для сторінок — вкладки Y7 з кнопками Закрити та Вийти, без нових вікон LG.','ІНФО',function(){notify('Вбудований плеєр може містити власну рекламу або бути заблокований');});
                 var events=(feed.livetv||[]).slice(0,85);
                 if(!events.length)row('Список поки порожній','LiveTV може тимчасово блокувати автоматичне зчитування; відкрий сайт.','','');
                 events.forEach(function(e){
@@ -375,7 +480,7 @@
                 });
             }
             section('Доступ та якість');
-            body.append($('<div class="y7s-sub"></div>').text('LiveTV: окремі плеєри з офіційного коду вбудовування можуть відкриватись усередині Lampa; рекламні вкладки блокуються, але реклама в самому плеєрі можлива. Прямі відкриті HLS/MP4/DASH запускаються штатним плеєром. DRM, геообмеження й передплати не обходяться. Наявність плеєра не гарантує наявності відео.'));
+            body.append($('<div class="y7s-sub"></div>').text('LiveTV: зовнішні сторінки відкриваються лише у вкладках Y7 з видимими кнопками закриття; нові рекламні вікна LG не запускаються. Реклама всередині сторінки все ще можлива, а деякі сайти блокують iframe. Прямі відкриті HLS/MP4/DASH запускаються штатним плеєром. DRM, геообмеження й передплати не обходяться. Наявність плеєра не гарантує наявності відео.'));
         }
         this.create=function(){
             style();build();scroll.append(body);root.append(scroll.render());
@@ -405,12 +510,12 @@
         this.destroy=function(){dead=true;if(timer)clearInterval(timer);off();try{scroll.destroy();}catch(e){}root.remove();};
     }
     function openSport(){
-        try{Lampa.Activity.push({url:'y7://sport/1.1.3',title:'Y7 Спорт',component:COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/1.1.4',title:'Y7 Спорт',component:COMPONENT,page:1});}
         catch(e){notify('не вдалося відкрити модуль');}
     }
     function boot(){
         if(!window.Lampa||!Lampa.Component||!Lampa.Activity||!Lampa.Scroll||!window.jQuery){setTimeout(boot,450);return;}
-        try{Lampa.Component.add(PLAYER_COMPONENT,LivePlayer);Lampa.Component.add(COMPONENT,Sport);}catch(e){notify('помилка реєстрації');return;}
+        try{Lampa.Component.add(PLAYER_COMPONENT,LivePlayer);Lampa.Component.add(SAFE_COMPONENT,SafeTabs);Lampa.Component.add(COMPONENT,Sport);}catch(e){notify('помилка реєстрації');return;}
         try{
             if(Lampa.Menu&&Lampa.Menu.addButton&&!document.querySelector('.y7-sport-menu')){
                 var m=Lampa.Menu.addButton(ICON,'Y7 Спорт',openSport),q=m&&m.jquery?m:$(m||[]);

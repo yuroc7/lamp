@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Y7 Sport feed builder v1.1.3.
+"""Y7 Sport feed builder v1.1.4.
 
 Public fixture metadata (ESPN), LiveTV event navigation, and detection of explicitly
 published video tags and LiveTV single-event embed players. No DRM/paywall/ad
@@ -564,7 +564,7 @@ def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
     try:channels=validated_channels()
     except (OSError,ValueError):channels=[]
     return {
-        'schema':1,'version':'1.1.3',
+        'schema':1,'version':'1.1.4',
         'updated_at':now.isoformat().replace('+00:00','Z'),
         'timezone':'Europe/Kyiv',
         'fixtures':fixture_results,
