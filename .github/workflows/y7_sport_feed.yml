@@ -1,6 +1,16 @@
 name: Y7 Sport automatic football feed
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'y7_sport.js'
+      - 'y7_game.js'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - 'sport_channels.json'
+      - '.github/workflows/y7_sport_feed.yml'
   schedule:
     - cron: '7,27,47 * * * *'
 permissions:
@@ -11,7 +21,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,15 +29,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch schedules and LiveTV fixture links
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install timezone data
+        run: python -m pip install -r requirements.txt
+      - name: Offline regression tests
+        run: |
+          python -m unittest discover -s tests -v
+          node --check y7_sport.js
+          node --check y7_game.js
+          node tests/test_lifecycle.cjs
+      - name: Refresh video sources and schedules
         run: python scripts/update_y7_sport_feed.py
+      - name: Validate public feed
+        run: python scripts/check_public_release.py .
       - name: Commit refreshed feed if changed
         run: |
           git config user.name "Y7 Sport Update"
           git config user.email "actions@users.noreply.github.com"
           git add y7_sport_feed.json
           if ! git diff --staged --quiet; then
-            git commit -m "chore(sport): refresh public football fixtures"
+            git commit -m "chore(sport): refresh video sources and fixtures"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
