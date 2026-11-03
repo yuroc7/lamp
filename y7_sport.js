@@ -1,5 +1,5 @@
 /*
- * Y7 SPORT / Football First 1.1.4
+ * Y7 SPORT / Football First 1.1.5
  * Separate Lampa / LG webOS extension: no changes to 1.js, Lampac or Y7 Gateway.
  * Uses static, automatically refreshed public match metadata from GitHub Pages.
  * LiveTV: embedded single-event player where provided, plus explicitly public video tags.
@@ -7,17 +7,17 @@
  */
 (function(){
     'use strict';
-    var VERSION='1.1.4',KEY='__Y7_SPORT_FOOTBALL_114__';
+    var VERSION='1.1.5',KEY='__Y7_SPORT_FOOTBALL_115__';
     if(window[KEY])return;
     window[KEY]=true;
-    var COMPONENT='y7_sport_114',CTRL='y7_sport_114_ctrl';
-    var PLAYER_COMPONENT='y7_sport_live_player_114',PLAYER_CTRL='y7_sport_live_player_ctrl_114';
-    var SAFE_COMPONENT='y7_sport_safe_tabs_114',SAFE_CTRL='y7_sport_safe_tabs_ctrl_114';
+    var COMPONENT='y7_sport_115',CTRL='y7_sport_115_ctrl';
+    var PLAYER_COMPONENT='y7_sport_live_player_115',PLAYER_CTRL='y7_sport_live_player_ctrl_115';
+    var SAFE_COMPONENT='y7_sport_safe_tabs_115',SAFE_CTRL='y7_sport_safe_tabs_ctrl_115';
     var SAFE_TABS=[],SAFE_ACTIVE=0;
     var playerRequest=null;
     var BASE='https://yuroc7.github.io/lamp/';
     var FEED=BASE+'y7_sport_feed.json';
-    var STORE='y7_sport_feed_114';
+    var STORE='y7_sport_feed_115';
     var ICON='<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 7l3 3M19 7l-3 3M6 17l3-2M18 17l-3-2"/></svg>';
     var SERVICES=[
         {id:'suspilne',name:'Суспільне Спорт',category:'ua',cost:'free',url:'https://suspilne.media/sport/schedule/live/',note:'Українські безкоштовні трансляції; доступність конкретних подій залежить від прав.'},
@@ -43,8 +43,8 @@
     var fallback={schema:1,updated_at:'2026-11-03T17:10:00Z',fixtures:[
         {id:'shakhtar_sporting_20261103',league:'ucl',competition:'Ліга чемпіонів',home:'Шахтар',away:'Спортінг',kickoff:'2026-11-03T17:45:00Z',status:'scheduled',important:true,
           broadcast:{name:'MEGOGO Футбол Перший',cost:'paid',url:'https://megogo.net/ua/sport/28488016-shakhtar-sportinh.html'},
-          livetv_url:'https://livetv.sx/eventinfo/399041287_shahter_sporting/' }
-        ],livetv:[{id:'399041287',title:'Шахтар — Спортінг',url:'https://livetv.sx/eventinfo/399041287_shahter_sporting/',sport:'football',playable:false}],
+          livetv_url:'https://livetv.sx/ua/eventinfo/399041287_shahter_sporting/' }
+        ],livetv:[{id:'399041287',title:'Шахтар — Спортінг',url:'https://livetv.sx/ua/eventinfo/399041287_shahter_sporting/',sport:'football',playable:false}],
         services:SERVICES,channels:[],health:{}};
     var memory=null,cacheTime=0,requesting=false;
     function notify(s){try{Lampa.Noty.show('Y7 Спорт: '+s);}catch(e){}}
@@ -52,6 +52,26 @@
         s=String(s||'').trim();
         if(!/^https:\/\//i.test(s)||s.length>3000)return '';
         try{var x=new URL(s);if(x.username||x.password)return '';if(!/^[a-z0-9.-]+$/i.test(x.hostname))return '';return s;}catch(e){return '';}
+    }
+    // LiveTV has an official Ukrainian locale at /ua/ (verified via its language menu).
+    // Normalize on TV as well as in the feed, including cached 1.1.x links.
+    function livetvUa(url){
+        url=safeUrl(url);
+        if(!url)return '';
+        return url.replace(/^https:\/\/(?:www\.)?livetv\.sx(?:\/(?:ua|enx))?(?=\/|\?|#|$)/i,'https://livetv.sx/ua');
+    }
+    function isUaClub(s){return /шахт|shakhtar|shahtar|динамо ки[їе]в|dynamo kyiv|dynamo kiev|полісся|polissya|дніпро|dnipro|кривбас|kryvbas|карпати|karpaty/i.test(String(s||''));}
+    function isEuroEvent(e){
+        var info=String((e&&e.competition)||'')+' '+String((e&&e.title)||'');
+        return /ліга чемпіонів|liga ch[ae]mp|champions league|лига чемпионов|ліга європи|europa league|лига европы|конференц|conference league/i.test(info);
+    }
+    function sortedEvents(data,filter){
+        var a=(data&&data.livetv||[]).filter(function(e){return !filter||filter(e);});
+        return a.sort(function(a,b){
+            var aa=isUaClub(a.title)?0:isEuroEvent(a)?1:2;
+            var bb=isUaClub(b.title)?0:isEuroEvent(b)?1:2;
+            return aa-bb;
+        });
     }
     function mediaUrl(url){return safeUrl(url)&&/\.(?:m3u8|mp4|mpd)(?:\?|$)/i.test(url);}
     function isPlayer(p){return p&&safeUrl(p.url)&&((p.kind==='embed'&&/\/export\/|\/embed\//i.test(p.url))||(p.kind==='direct'&&mediaUrl(p.url)));}
@@ -141,6 +161,7 @@
         (document.head||document.documentElement).appendChild(n);
     }
     function qr(url,title,returnCtrl){
+        url=livetvUa(url);
         url=safeUrl(url);if(!url)return notify('некоректне посилання');
         try{
             var overlay=$('<div class="y7s-qr"></div>'),card=$('<div class="y7s-card"></div>');
@@ -161,7 +182,7 @@
     // Never call native external-browser calls: on webOS these create native
     // browser windows that the Lampa plugin cannot close or enumerate.
     function addSafeTab(url,title){
-        url=safeUrl(url);if(!url)return notify('Некоректна URL');
+        url=livetvUa(url);if(!url)return notify('Некоректна URL');
         var i=-1;
         SAFE_TABS.forEach(function(t,j){if(t.url===url)i=j;});
         if(i<0){
@@ -170,11 +191,11 @@
             i=SAFE_TABS.length-1;
         }
         SAFE_ACTIVE=i;
-        try{Lampa.Activity.push({url:'y7://sport/safe-tabs/1.1.4',title:'Y7 Спорт · Вкладки',component:SAFE_COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/safe-tabs/1.1.5',title:'Y7 Спорт · Вкладки',component:SAFE_COMPONENT,page:1});}
         catch(e){notify('Не вдалося відкрити вкладки; використовуй QR');qr(url,title);}
     }
     function openExternal(url,title){
-        url=safeUrl(url);if(!url)return notify('немає коректної адреси');
+        url=livetvUa(url);if(!url)return notify('немає коректної адреси');
         var items=[
             {title:'Вкладка Y7 у Lampa · без нових рекламних вікон',value:'tab'},
             {title:'QR для телефона · якщо сайт не дозволяє iframe',value:'qr'}
@@ -222,7 +243,7 @@
             frame.setAttribute('title',active.title);
             frame.src=active.url;
             view.append(frame);
-            foot.text('Пульт: керування кнопками зверху. Рекламні pop-up заблоковані. Якщо сайт не відкривається — QR. ✕ Закрити вкладку або Вийти у Y7.');
+            foot.text('LIVE TV · українська мова за замовчуванням. Нові рекламні вікна заборонені; реклама всередині сторінки можлива. ✕ Закрити вкладку / Вийти у Y7.');
             try{Lampa.Controller.collectionSet(root);Lampa.Controller.collectionFocus(last||root.find('.selector')[0],root);}catch(e){}
         }
         function exit(){try{Lampa.Controller.remove(SAFE_CTRL);}catch(e){}try{Lampa.Activity.backward();}catch(e2){}}
@@ -236,6 +257,7 @@
         this.create=function(){
             style();
             control(actions,'↻ Оновити',refresh);
+            control(actions,'🇺🇦 LiveTV UA',function(){var t=SAFE_TABS[current];if(t&&/livetv\.sx/i.test(t.url)){t.url='https://livetv.sx/ua/';t.title='LiveTV · Українська';load();}else addSafeTab('https://livetv.sx/ua/','LiveTV · Українська');});
             control(actions,'✕ Закрити вкладку',closeTab);
             control(actions,'QR',function(){var t=SAFE_TABS[current];if(t)qr(t.url,t.title,SAFE_CTRL);});
             control(actions,'⬅ Вийти у Y7',exit);
@@ -280,7 +302,7 @@
         choices=(choices||[]).filter(function(x){return isPlayer(x)&&x.kind==='embed';});
         if(!choices.length)return notify('Вбудований плеєр не знайдено');
         playerRequest={title:title,choices:choices,start:Math.max(0,start||0)};
-        try{Lampa.Activity.push({url:'y7://sport/live/1.1.4',title:title,component:PLAYER_COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/live/1.1.5',title:title,component:PLAYER_COMPONENT,page:1});}
         catch(e){notify('Не вдалося відкрити плеєр');}
     }
     function LivePlayer(){
@@ -298,7 +320,7 @@
             iframe.setAttribute('title',ctx.title||'Спортивна трансляція');
             iframe.src=list[current].url;
             box.append(iframe);
-            tip.text('Плеєр '+(current+1)+'/'+list.length+' · спробуй OK у відео. Вкладки й переадресації заблоковані. Якщо екран чорний — Наступний плеєр.');
+            tip.text('Вбудований плеєр '+(current+1)+'/'+list.length+' · нові вкладки заборонені. Реклама всередині чужого плеєра може залишатися. Якщо немає відео — Наступний.');
         }
         function btn(title,action){
             var b=$('<div class="y7s-action selector"></div>').text(title);
@@ -345,9 +367,9 @@
             var name=p.kind==='direct'?'▶ Відеопотік '+(i+1):'▶ Плеєр LiveTV '+(i+1)+' · всередині Lampa';
             choices.push({label:name,kind:p.kind,url:p.url,play:p.kind==='direct'});
         });
-        choices.push({label:'Сторінка LiveTV · вкладка Y7 (pop-up заблоковані; реклама в сторінці можлива)',kind:'safe',url:event.url});
-        choices.push({label:'Сторінка LiveTV · QR для телефона',kind:'qr',url:event.url});
-        if(!available.length)notify('Прямого відео поки не виявлено. Сторінка LiveTV — лише вручну.');
+        choices.push({label:'🇺🇦 LiveTV · українська сторінка у вкладці Y7',kind:'safe',url:livetvUa(event.url)});
+        choices.push({label:'LiveTV UA · QR для телефона',kind:'qr',url:livetvUa(event.url)});
+        if(!available.length)notify('Прямих відеопотоків наразі немає. Українська сторінка доступна у вкладці Y7.');
         try{
             Lampa.Select.show({title:title,
                 items:choices.map(function(c,i){return {title:c.label,value:String(i)};}),
@@ -383,7 +405,7 @@
         if(m.broadcast&&safeUrl(m.broadcast.url))items.push({label:(m.broadcast.name||'Офіційний мовник')+' · '+(m.broadcast.cost==='paid'?'передплата':'за умовами сервісу'),url:m.broadcast.url});
         var found=findEventForFixture(m,memory||fallback);
         if(found&&playableChoices(found).length)items.unshift({label:'▶ LiveTV · '+playableChoices(found).length+' можливих плеєрів',kind:'matchplayers',event:found,url:found.url});
-        if(safeUrl(m.livetv_url))items.push({label:'LiveTV · оригінальна сторінка (реклама)',url:m.livetv_url});
+        if(safeUrl(m.livetv_url))items.push({label:'LiveTV · українська сторінка у вкладці Y7',url:livetvUa(m.livetv_url)});
         items.push({label:'UEFA.tv · огляди, архів, окремі безкоштовні матчі',url:'https://www.uefa.tv/'});
         options(title,items);
     }
@@ -432,7 +454,7 @@
             body.empty();
             var hero=$('<div class="y7s-hero"></div>');
             hero.append('<div class="y7s-titlebar">⚽ Y7 Спорт · Футбол</div>');
-            hero.append($('<div class="y7s-sub"></div>').text('Ліга чемпіонів · Ліга Європи · Ліга конференцій · українські клуби · безкоштовний спорт'));
+            hero.append($('<div class="y7s-sub"></div>').text('Ліга чемпіонів · Ліга Європи · Ліга конференцій · LiveTV Україна · безкоштовний спорт'));
             hero.append($('<div class="y7s-sub"></div>').text(ageLabel(feed)+(error?' · '+error:'')));
             body.append(hero);
             TABS.forEach(button);
@@ -450,17 +472,28 @@
                     sub+=' · '+(m.broadcast&&m.broadcast.cost==='paid'?'Мовник: передплата':'Мовник уточнюється');
                     row(ua+m.home+' — '+m.away,sub,statusText(m),function(){fixtureOptions(m);});
                 });
+                if(tab==='europe'){
+                    var euro=sortedEvents(feed,isEuroEvent).slice(0,28);
+                    section('LiveTV · єврокубкові сторінки (не прямі трансляції)');
+                    if(!euro.length)row('Немає підтверджених єврокубкових посилань LiveTV','Розклад може тимчасово бути недоступним. Спробуй оновити.','','');
+                    euro.forEach(function(e){
+                        row((isUaClub(e.title)?'🇺🇦 ':'')+e.title,(e.competition||'Єврокубки')+' · час уточнюй на сторінці',
+                            playableChoices(e).length?'ПЛЕЄР':'СТОРІНКА',function(){livetvOptions(e);});
+                    });
+                }
                 section('Трансляції єврокубків');
                 row('MEGOGO Футбол','Офіційні матчі ЛЧ в Україні, за передплатою.','ПЛАТНО',function(){openExternal('https://megogo.net/ua/sport','MEGOGO Футбол');});
                 row('LiveTV · футбольний календар','Матчі, зовнішні сторінки з посиланнями. Не гарантія прямого відео.','СТОРІНКИ',function(){changeTab('livetv');});
             }else if(tab==='livetv'){
                 section('LiveTV · можливі плеєри всередині Lampa');
+                row('🇺🇦 Відкрити LiveTV українською','Офіційна українська версія. У вкладці Y7 без нових рекламних вікон.','ВІДКРИТИ',function(){addSafeTab('https://livetv.sx/ua/','LiveTV · Українська');});
+                row('Про рекламу та пряме відео','Попапи й зовнішній браузер блокуються. Реклама всередині чужого iframe не контролюється. Прямих потоків може не бути.','ВАЖЛИВО',function(){notify('Прямі відео запускаємо у плеєрі Lampa лише якщо є придатна відкрита адреса.');});
                 row('Як працюють плеєри','Окремий плеєр, якщо він є. Для сторінок — вкладки Y7 з кнопками Закрити та Вийти, без нових вікон LG.','ІНФО',function(){notify('Вбудований плеєр може містити власну рекламу або бути заблокований');});
-                var events=(feed.livetv||[]).slice(0,85);
+                var events=sortedEvents(feed).slice(0,85);
                 if(!events.length)row('Список поки порожній','LiveTV може тимчасово блокувати автоматичне зчитування; відкрий сайт.','','');
                 events.forEach(function(e){
                     var found=playableChoices(e),label=found.length?('Знайдено '+found.length+' плеєр(ів), робота не підтверджена'):(e.probe_status==='fetch_error'?'Перевірка цієї сторінки не вдалася':(!Array.isArray(e.players)?'Плеєр ще не перевірявся':'Окремого плеєра матчу не виявлено'));
-                    row(e.title||'Матч',label,found.length?'▶ ПЛЕЄРИ':'ДЖЕРЕЛА',function(){livetvOptions(e);});
+                    row(e.title||'Матч',((e.competition?e.competition+' · ':'')+label),found.length?'▶ ПЛЕЄРИ':'ДЖЕРЕЛА',function(){livetvOptions(e);});
                 });
             }else if(tab==='free'||tab==='all'){
                 section(tab==='free'?'Безкоштовні офіційні спортивні сервіси':'Усі спортивні сервіси');
@@ -480,7 +513,7 @@
                 });
             }
             section('Доступ та якість');
-            body.append($('<div class="y7s-sub"></div>').text('LiveTV: зовнішні сторінки відкриваються лише у вкладках Y7 з видимими кнопками закриття; нові рекламні вікна LG не запускаються. Реклама всередині сторінки все ще можлива, а деякі сайти блокують iframe. Прямі відкриті HLS/MP4/DASH запускаються штатним плеєром. DRM, геообмеження й передплати не обходяться. Наявність плеєра не гарантує наявності відео.'));
+            body.append($('<div class="y7s-sub"></div>').text('LiveTV відкривається українською у вкладках Y7: нові рекламні вікна не створюються, але реклама всередині чужого iframe може залишатися й деякі сайти забороняють вбудовування. Прямі відкриті HLS/MP4/DASH запускаються штатним плеєром. DRM, геообмеження й передплати не обходяться. Наявність плеєра не гарантує наявності відео.'));
         }
         this.create=function(){
             style();build();scroll.append(body);root.append(scroll.render());
@@ -510,7 +543,7 @@
         this.destroy=function(){dead=true;if(timer)clearInterval(timer);off();try{scroll.destroy();}catch(e){}root.remove();};
     }
     function openSport(){
-        try{Lampa.Activity.push({url:'y7://sport/1.1.4',title:'Y7 Спорт',component:COMPONENT,page:1});}
+        try{Lampa.Activity.push({url:'y7://sport/1.1.5',title:'Y7 Спорт',component:COMPONENT,page:1});}
         catch(e){notify('не вдалося відкрити модуль');}
     }
     function boot(){

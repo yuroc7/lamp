@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Y7 Sport feed builder v1.1.4.
+"""Y7 Sport feed builder v1.1.5.
 
 Public fixture metadata (ESPN), LiveTV event navigation, and detection of explicitly
 published video tags and LiveTV single-event embed players. No DRM/paywall/ad
@@ -71,7 +71,7 @@ FEATURED = {
     'kickoff':'2026-11-03T17:45:00Z',
     'status':'scheduled','important':True,
     'broadcast':{'name':'MEGOGO · Футбол Перший', 'cost':'paid','url':'https://megogo.net/ua/sport/28488016-shakhtar-sportinh.html', 'note':'В Україні лише з передплатою'},
-    'livetv_url':'https://livetv.sx/eventinfo/399041287_shahter_sporting/',
+    'livetv_url':'https://livetv.sx/ua/eventinfo/399041287_shahter_sporting/',
     'source':'Офіційна сторінка MEGOGO, 03.11.2026',
 }
 
@@ -266,6 +266,26 @@ class LiveTVLinks(HTMLParser):
                 self.cur=None
 
 
+def livetv_ukrainian_url(raw):
+    """Map supported LiveTV event/home URLs to the actual /ua/ locale.
+
+    Never change an unrelated host or infer a direct media URL.
+    """
+    p=urllib.parse.urlsplit(str(raw or ''))
+    if p.scheme!='https' or p.hostname not in ('livetv.sx','www.livetv.sx'):
+        return str(raw or '')
+    path=re.sub(r'^/(?:enx|ua)(?=/|$)','',p.path,flags=re.I)
+    return urllib.parse.urlunsplit(('https','livetv.sx','/ua'+(path or '/'),p.query,''))
+
+
+def infer_livetv_competition(hint):
+    hint=str(hint or '').lower()
+    if re.search(r'ліга чемпіонів|лига чемпионов|champions league|liga champions',hint):return 'Ліга чемпіонів'
+    if re.search(r'ліга європи|лига европы|europa league',hint):return 'Ліга Європи'
+    if re.search(r'конференц|conference league',hint):return 'Ліга конференцій'
+    return ''
+
+
 def parse_livetv(html,base='https://livetv.sx/',assume_football=False):
     if isinstance(html,bytes):
         head=html[:1500].lower()
@@ -287,7 +307,7 @@ def parse_livetv(html,base='https://livetv.sx/',assume_football=False):
         u=urllib.parse.urlparse(url)
         if u.scheme!='https' or u.hostname not in ('livetv.sx','www.livetv.sx','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me'):continue
         if not EVENT_ID.search(u.path):continue
-        good[it['id']]={'id':it['id'],'title':title,'url':url,'sport':'football','provider':'LiveTV','playable':False}
+        good[it['id']]={'id':it['id'],'title':title,'url':livetv_ukrainian_url(url),'sport':'football','provider':'LiveTV','playable':False,'competition':infer_livetv_competition(hint)}
     return list(good.values())
 
 
@@ -444,9 +464,10 @@ def fetch_livetv():
     errors=[];events={}
     LAST_LIVETV_PROBES.clear()
     LAST_LIVETV_PROBES.update({'attempted':0,'fetched':0,'errors':0,'with_embeds':0,'with_media':0,'without_event_id':0,'with_webplayer_text':0,'with_raw_webplayer_markup':0,'event_scoped_candidates':0,'error_types':{}})
-    for url in ('https://livetv.sx/enx/allupcomingsports/1/', 'https://livetv.sx/', 'https://livetv.sx/allupcoming/'):
+    for url in ('https://livetv.sx/ua/allupcoming/', 'https://livetv.sx/ua/', 'https://livetv.sx/enx/allupcomingsports/1/'):
         try:
-            for e in parse_livetv(get_url(url),url,assume_football=('/allupcomingsports/1/' in url)):events[e['id']]=e
+            for e in parse_livetv(get_url(url),url,assume_football=('/allupcomingsports/1/' in url)):
+                events.setdefault(e['id'],e)  # Ukrainian labels and URLs are preferred
         except Exception as exc:
             errors.append(type(exc).__name__)
     listed=list(events.values())[:MAX_LIVETV]
@@ -564,7 +585,7 @@ def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
     try:channels=validated_channels()
     except (OSError,ValueError):channels=[]
     return {
-        'schema':1,'version':'1.1.4',
+        'schema':1,'version':'1.1.5',
         'updated_at':now.isoformat().replace('+00:00','Z'),
         'timezone':'Europe/Kyiv',
         'fixtures':fixture_results,
