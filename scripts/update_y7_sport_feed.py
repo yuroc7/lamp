@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Y7 Sport feed builder v1.0.0.
+"""Y7 Sport feed builder v1.1.0.
 
-Public fixture metadata (ESPN) and event navigation (LiveTV). It never fetches,
-resolves, proxies, or decrypts third-party player streams. User-authorized
-public direct media URLs may be listed separately in sport_channels.json.
+Public fixture metadata (ESPN), LiveTV event navigation, and detection of explicitly
+published video tags and LiveTV single-event embed players. No DRM/paywall/ad
+bypass, no scripts, no arbitrary third-party link following. The embed remains
+third-party and may contain its own ads. Licensed custom channels stay separate.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import json
 from pathlib import Path
 import re
 import urllib.parse
+import ipaddress
 import urllib.request
 from urllib.request import build_opener, HTTPRedirectHandler
 from zoneinfo import ZoneInfo
@@ -35,7 +37,7 @@ TAG = re.compile(r'<[^>]+>')
 FOOTBALL = re.compile(r'(?iu)\b(?:football|soccer|футбол|liga champions|лига чемпионов|ліга чемпіонів)\b')
 OTHER_SPORT = re.compile(r'(?iu)\b(?:hockey|хоккей|tennis|теннис|basketball|баскетбол|volleyball|волейбол|mma|мма|бокс|boxing|snooker|снукер|baseball|бейcбол)\b')
 TIMEOUT = 14
-ALLOWED_UPSTREAM = {'livetv.sx','site.api.espn.com','livetv911.me'}
+ALLOWED_UPSTREAM = {'livetv.sx','site.api.espn.com','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me'}
 
 class SafeRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -45,6 +47,8 @@ class SafeRedirect(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 MAX_LIVETV = 90
+MAX_PLAYER_PROBES = 18
+MAX_PLAYERS_PER_EVENT = 6
 MAX_FIXTURES = 90
 
 SERVICES = [
@@ -187,7 +191,7 @@ def parse_livetv(html,base='https://livetv.sx/',assume_football=False):
         if not assume_football and not FOOTBALL.search(hint) and not re.search(r'(?iu)(shakhtar|sporting|шахт[еа]р|спортинг|atletico|атлетико|бавария|uefa|barcelona|барселона|реал|манчестер)',title):continue
         url=urllib.parse.urljoin(base,it['href']).split('#')[0]
         u=urllib.parse.urlparse(url)
-        if u.scheme!='https' or u.hostname not in ('livetv.sx','www.livetv.sx','livetv911.me'):continue
+        if u.scheme!='https' or u.hostname not in ('livetv.sx','www.livetv.sx','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me'):continue
         if not EVENT_ID.search(u.path):continue
         good[it['id']]={'id':it['id'],'title':title,'url':url,'sport':'football','provider':'LiveTV','playable':False}
     return list(good.values())
@@ -214,6 +218,85 @@ def probe_livetv_player_descriptions(html):
     ace_count=min(90,len(re.findall(r'(?i)\b\d{3,5}\s*kbps\b',ace[:4000])))
     return {'browser_options':web_count,'acestream_options':ace_count,'player_info':'Опис варіантів на сторінці; робота не перевірена'}
 
+
+# A WebPlayer advertised by LiveTV can be an iframe, not a direct video source.
+# Only accept *single-event* player exports published directly in the event HTML,
+# and explicitly declared <video>/<source> URLs. Avoid arbitrary script strings,
+# tracking links, ad frames, redirects, obfuscated JS, and unknown hosts.
+PLAYER_EXPORT = re.compile(r'(?i)(?:^|/)(?:export|embed)/(?:[^?#]*/)?(?:webplayer|player)(?:[./?]|$)')
+MEDIA_EXT = re.compile(r'(?i)\.(?:m3u8|mp4|mpd)(?:$|\?)')
+LIVETV_HOSTS = {'livetv.sx','www.livetv.sx','livetv911.me','livetv906.me','livetv907.me','livetv-ru17.me'}
+
+def _safe_public_url(raw,base):
+    raw=unescape(str(raw or '')).strip().replace('\\/','/')
+    if raw.lower().startswith(('javascript:','data:','blob:','file:')):return ''
+    url=urllib.parse.urljoin(base,raw).split('#')[0]
+    u=urllib.parse.urlsplit(url)
+    if u.scheme!='https' or not u.hostname or u.username or u.password or len(url)>2100:return ''
+    host=u.hostname.lower()
+    if host in ('localhost','localhost.localdomain') or host.endswith(('.local','.internal')):return ''
+    try:
+        ip=ipaddress.ip_address(host)
+        if not ip.is_global:return ''
+    except ValueError:pass
+    return url
+
+class PublicPlayers(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.frames=[];self.media=[];self.textareas=[];self.in_textarea=False;self.buf=[]
+    def handle_starttag(self,tag,attrs):
+        attrs=dict(attrs)
+        if tag=='iframe':self.frames.append(str(attrs.get('src') or attrs.get('data-src') or ''))
+        if tag=='input':
+            v=str(attrs.get('value') or attrs.get('data-clipboard-text') or '')
+            if '<iframe' in unescape(v).lower() and len(v)<9000:self.textareas.append(v)
+        if tag in ('video','source','a'):
+            u=attrs.get('src') or attrs.get('data-src') or (attrs.get('href') if tag=='a' else '') or ''
+            if u and MEDIA_EXT.search(str(u)):self.media.append(str(u))
+        if tag=='textarea':self.in_textarea=True;self.buf=[]
+    def handle_data(self,text):
+        if self.in_textarea:self.buf.append(text)
+    def handle_endtag(self,tag):
+        if tag=='textarea' and self.in_textarea:
+            self.textareas.append(''.join(self.buf));self.in_textarea=False;self.buf=[]
+
+def extract_public_players(html,event_url):
+    """Extract declared, non-DRM source/iframe URLs only; does NOT assert rights.
+
+    The official LiveTV webmaster single-event iframe code is preferable.
+    Third-party iframe embeds and scripts are deliberately not visited/executed.
+    """
+    if isinstance(html,bytes):
+        head=html[:1500].lower()
+        html=html.decode('cp1251' if b'windows-1251' in head else 'utf-8','replace')
+    parser=PublicPlayers()
+    try:parser.feed(html)
+    except Exception:return []
+    for body in parser.textareas:
+        # LiveTV publishes a ready-to-copy iframe embed in a textarea.
+        if len(body)>9000:continue
+        embedded=PublicPlayers()
+        try:embedded.feed(unescape(body));parser.frames.extend(embedded.frames)
+        except Exception:pass
+    players=[];seen=set()
+    def add(kind,raw):
+        url=_safe_public_url(raw,event_url)
+        if not url or url in seen:return
+        if kind=='embed':
+            u=urllib.parse.urlsplit(url)
+            if u.hostname.lower() not in LIVETV_HOSTS:return
+            # Reject unrelated widgets, entire site, advertising iframes or channel aggregators.
+            if not PLAYER_EXPORT.search(u.path) or 'webmasters' in u.path.lower() or 'informers' in u.path.lower():return
+            if not any(x in (u.path+'?'+u.query).lower() for x in ('webplayer','player')):return
+        elif not MEDIA_EXT.search(url):return
+        seen.add(url)
+        players.append({'kind':kind,'url':url,'title':'Вбудований плеєр LiveTV' if kind=='embed' else 'Відеопотік із HTML',
+                        'verified':False,'note':'Джерело знайдене в HTML; доступність та права не підтверджені'})
+    for raw in parser.frames:add('embed',raw)
+    for raw in parser.media:add('direct',raw)
+    return players[:MAX_PLAYERS_PER_EVENT]
+
 def fetch_livetv():
     errors=[];events={}
     for url in ('https://livetv.sx/enx/allupcomingsports/1/', 'https://livetv.sx/', 'https://livetv.sx/allupcoming/'):
@@ -222,14 +305,19 @@ def fetch_livetv():
         except Exception as exc:
             errors.append(type(exc).__name__)
     listed=list(events.values())[:MAX_LIVETV]
-    # Fetch detail metadata only for a handful of prominent event pages.
-    # Keep the refresh bounded even when LiveTV is slow or rate-limits clients.
-    priority=sorted(listed,key=lambda e:(0 if UA_TERMS.search(e['title']) else 1,0 if re.search(r'(?iu)(champions|чемпионов|чемпіонів|барселона|sporting|спoртинг)',e['title']) else 1))[:6]
+    # Fetch event pages and detect only explicit player embed codes or media tags.
+    # Budget is limited to avoid overloading upstream and GitHub Actions timeouts.
+    priority=sorted(listed,key=lambda e:(0 if UA_TERMS.search(e['title']) else 1,0 if re.search(r'(?iu)(champions|чемпионов|чемпіонів|барселона|sporting|спoртинг)',e['title']) else 1))[:MAX_PLAYER_PROBES]
     if priority:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
             jobs={pool.submit(get_url,e['url']):e for e in priority}
             for future in concurrent.futures.as_completed(jobs):
-                try:jobs[future].update(probe_livetv_player_descriptions(future.result()))
+                try:
+                    html=future.result()
+                    event=jobs[future]
+                    event.update(probe_livetv_player_descriptions(html))
+                    event['players']=extract_public_players(html,event['url'])
+                    event['playable']=bool(event['players'])
                 except Exception:pass
     return listed,errors
 
@@ -312,7 +400,7 @@ def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
     try:channels=validated_channels()
     except (OSError,ValueError):channels=[]
     return {
-        'schema':1,'version':'1.0.0',
+        'schema':1,'version':'1.1.0',
         'updated_at':now.isoformat().replace('+00:00','Z'),
         'timezone':'Europe/Kyiv',
         'fixtures':fixture_results,
@@ -322,7 +410,9 @@ def build(now=None, espn_fn=fetch_espn, livetv_fn=fetch_livetv):
         'health':{'fixtures_ok':len(LEAGUES)-len(failed),'fixtures_total':len(LEAGUES),
                   'fixtures_fallback':bool(failed and not fixture_results),
                   'livetv_ok':not bool(live_errors),'livetv_errors':len(live_errors),
-                  'livetv_note':'LiveTV provides event links only, not verified playable streams',
+                  'livetv_note':'LiveTV: explicit public player embeds/video tags only; player availability unverified',
+                  'livetv_players_found':sum(len(e.get('players') or []) for e in live_events),
+                  'livetv_events_with_players':sum(bool(e.get('players')) for e in live_events),
                   'errors':(failed+live_errors)[:7]}
     }
 
@@ -338,6 +428,7 @@ def main():
     candidate.replace(OUTPUT)
     print('Y7 Sport feed: %d fixtures; %d LiveTV event links; %d services; ESPN ok %d/%d' % (
         len(data['fixtures']),len(data['livetv']),len(data['services']),data['health']['fixtures_ok'],len(LEAGUES)))
+    print('LiveTV player candidates: %d in %d events (not verified playable)' % (data['health']['livetv_players_found'],data['health']['livetv_events_with_players']))
     return 0
 
 if __name__=='__main__':
