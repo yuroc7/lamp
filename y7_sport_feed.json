@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "version": "1.0.0",
-  "updated_at": "2026-11-03T17:15:00Z",
+  "updated_at": "2026-11-03T18:05:48.258297Z",
   "timezone": "Europe/Kyiv",
   "fixtures": [
     {
@@ -25,9 +25,730 @@
   ],
   "livetv": [
     {
+      "id": "399041257",
+      "title": "Галатасарай – Штутгарт",
+      "url": "https://livetv.sx/eventinfo/399041257__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false,
+      "browser_options": 7,
+      "acestream_options": 4,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена"
+    },
+    {
       "id": "399041287",
       "title": "Шахтер Донецк – Спортинг",
-      "url": "https://livetv.sx/eventinfo/399041287_shahter_sporting/",
+      "url": "https://livetv.sx/eventinfo/399041287__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false,
+      "browser_options": 5,
+      "acestream_options": 3,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена"
+    },
+    {
+      "id": "571148339",
+      "title": "Аль-Хиляль – Шабаб Аль-Ахли",
+      "url": "https://livetv.sx/eventinfo/571148339__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false,
+      "browser_options": 0,
+      "acestream_options": 1,
+      "player_info": "Опис варіантів на сторінці; робота не перевірена"
+    },
+    {
+      "id": "570717779",
+      "title": "Эстегляль Тегеран – Аль-Шамаль",
+      "url": "https://livetv.sx/eventinfo/570717779_esteglyal_tegeran_al_shamal/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "570517540",
+      "title": "Истра – Неретва",
+      "url": "https://livetv.sx/eventinfo/570517540_istra_neretva/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "570516114",
+      "title": "Аль-Хуссейн – Аль-Шорта",
+      "url": "https://livetv.sx/eventinfo/570516114_al_husseyn_al_shorta/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631211934",
+      "title": "Езеро – Дечич",
+      "url": "https://livetv.sx/eventinfo/631211934_ezero_dechich/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "626857424",
+      "title": "Dolphins – Western Province",
+      "url": "https://livetv.sx/enx/eventinfo/626857424_dolphins_western_province/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631211928",
+      "title": "АЕЛ Лимасол – Ираклис Геролаккос",
+      "url": "https://livetv.sx/eventinfo/631211928_ael_limasol_iraklis_gerolakkos/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "627152054",
+      "title": "Lokomotiv Zagreb (W) – Koka (W)",
+      "url": "https://livetv.sx/enx/eventinfo/627152054_lokomotiv_zagreb_w_koka_w/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "628465237",
+      "title": "Спартак Кс – Волна",
+      "url": "https://livetv.sx/eventinfo/628465237_spartak_ks_volna/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "630882547",
+      "title": "Спартак Кострома – Волна",
+      "url": "https://livetv.sx/eventinfo/630882547_spartak_kostroma_volna/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "632096559",
+      "title": "Люнгбю – Раннерс",
+      "url": "https://livetv.sx/eventinfo/632096559_lyngby_ranners/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "570718244",
+      "title": "Хробры Глогув – Арка Гдыня",
+      "url": "https://livetv.sx/eventinfo/570718244_hrobri_gloguv_arka_gdinya/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "570718245",
+      "title": "Погонь Седльце – Рух Хожув",
+      "url": "https://livetv.sx/eventinfo/570718245_pogon_sedlce_ruh_hozhuv/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "570716540",
+      "title": "Ferencvaros (W) – Esztergom (W)",
+      "url": "https://livetv.sx/enx/eventinfo/570716540__ferencvaros_w__esztergom_w/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631211929",
+      "title": "Кармиотисса – Эрмис Арадипу",
+      "url": "https://livetv.sx/eventinfo/631211929_karmiotissa_ermis_aradipu/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631200936",
+      "title": "Мамелоди – Голден Эрроус",
+      "url": "https://livetv.sx/eventinfo/631200936_mamelodi_golden_errous/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "628507022",
+      "title": "Анайтасуна – Алавес",
+      "url": "https://livetv.sx/eventinfo/628507022_anaytasuna_alaves/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "570911102",
+      "title": "Сириус – Хальмстад",
+      "url": "https://livetv.sx/eventinfo/570911102_sirius_halmstad/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "627760150",
+      "title": "Смуха – Пирамидс",
+      "url": "https://livetv.sx/eventinfo/627760150_smuha_piramids/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "627760151",
+      "title": "ЕНППИ – Асьют Петролеум",
+      "url": "https://livetv.sx/eventinfo/627760151_enppi_asyt_petroleum/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "627150523",
+      "title": "Teramo (W) – Salerno (W)",
+      "url": "https://livetv.sx/enx/eventinfo/627150523_teramo_w_salerno_w/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "632022153",
+      "title": "Орхус (Ж) – Мидтьюлланн (Ж)",
+      "url": "https://livetv.sx/eventinfo/632022153__orhus_zh__midtyllann_zh/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631228089",
+      "title": "Doukas – AEL",
+      "url": "https://livetv.sx/enx/eventinfo/631228089_doukas_ael/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041170",
+      "title": "Атлетико Мадрид – Бавария",
+      "url": "https://livetv.sx/eventinfo/399041170__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041183",
+      "title": "Барселона – Астон Вилла",
+      "url": "https://livetv.sx/eventinfo/399041183__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041189",
+      "title": "Вильярреал – ПСЖ",
+      "url": "https://livetv.sx/eventinfo/399041189__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041200",
+      "title": "Манчестер Юн – Рома",
+      "url": "https://livetv.sx/eventinfo/399041200__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041222",
+      "title": "ЛАСК – Слован Братислава",
+      "url": "https://livetv.sx/eventinfo/399041222__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041229",
+      "title": "Будё/Глимт – Лилль",
+      "url": "https://livetv.sx/eventinfo/399041229__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "399041271",
+      "title": "Фейеноорд – Интер",
+      "url": "https://livetv.sx/eventinfo/399041271__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571092425",
+      "title": "Cambridge Utd – Brighton U-21",
+      "url": "https://livetv.sx/enx/eventinfo/571092425__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571092426",
+      "title": "Newport County – Crystal Palace U-21",
+      "url": "https://livetv.sx/enx/eventinfo/571092426__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571092427",
+      "title": "Rochdale – Doncaster Rovers",
+      "url": "https://livetv.sx/enx/eventinfo/571092427__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571092428",
+      "title": "Rotherham Utd – Newcastle United U-21",
+      "url": "https://livetv.sx/enx/eventinfo/571092428__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243538",
+      "title": "Charlton Athletic – Bolton Wanderers",
+      "url": "https://livetv.sx/enx/eventinfo/571243538__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243539",
+      "title": "Watford – Lincoln City",
+      "url": "https://livetv.sx/enx/eventinfo/571243539__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243540",
+      "title": "Queens Park Rangers – Burnley",
+      "url": "https://livetv.sx/enx/eventinfo/571243540__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243541",
+      "title": "Preston – Sheffield Utd",
+      "url": "https://livetv.sx/enx/eventinfo/571243541__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243542",
+      "title": "Portsmouth – Swansea City",
+      "url": "https://livetv.sx/enx/eventinfo/571243542__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243543",
+      "title": "Derby County – Norwich City",
+      "url": "https://livetv.sx/enx/eventinfo/571243543__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571243544",
+      "title": "Blackburn – Stoke City",
+      "url": "https://livetv.sx/enx/eventinfo/571243544__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631211930",
+      "title": "Torreense (W) – Benfica (W)",
+      "url": "https://livetv.sx/enx/eventinfo/631211930__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "423158718",
+      "title": "Huddersfield – Luton Town",
+      "url": "https://livetv.sx/enx/eventinfo/423158718__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "618773478",
+      "title": "Northampton Town – Oldham Athletic",
+      "url": "https://livetv.sx/enx/eventinfo/618773478__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571290980",
+      "title": "Comerciantes Unidos – Deportiva Tarma",
+      "url": "https://livetv.sx/enx/eventinfo/571290980__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571289000",
+      "title": "West Bromwich Albion – Southampton",
+      "url": "https://livetv.sx/enx/eventinfo/571289000__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571289001",
+      "title": "Birmingham City – Millwall",
+      "url": "https://livetv.sx/enx/eventinfo/571289001__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571869337",
+      "title": "Deportivo Pereira – Deportes Tolima",
+      "url": "https://livetv.sx/enx/eventinfo/571869337__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "561977789",
+      "title": "Mushuc Runa – Manta",
+      "url": "https://livetv.sx/enx/eventinfo/561977789__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571482416",
+      "title": "Xelaju MC – Deportivo Marquense",
+      "url": "https://livetv.sx/enx/eventinfo/571482416__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "578840816",
+      "title": "Monagas – Caracas",
+      "url": "https://livetv.sx/enx/eventinfo/578840816__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "631211927",
+      "title": "River Plate II – Tigre II",
+      "url": "https://livetv.sx/enx/eventinfo/631211927__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "571773567",
+      "title": "Chapecoense – Mirassol",
+      "url": "https://livetv.sx/enx/eventinfo/571773567__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "576864720",
+      "title": "Deportivo Pasto – Jaguares de Cordoba",
+      "url": "https://livetv.sx/enx/eventinfo/576864720__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "578840817",
+      "title": "Deportivo Tachira – Puerto Cabello",
+      "url": "https://livetv.sx/enx/eventinfo/578840817__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "572193397",
+      "title": "Inter-RS – Coritiba",
+      "url": "https://livetv.sx/enx/eventinfo/572193397__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "576273681",
+      "title": "Sporting San Jose – Perez Zeledon",
+      "url": "https://livetv.sx/enx/eventinfo/576273681__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "572293153",
+      "title": "Alianza Lima – Cienciano",
+      "url": "https://livetv.sx/enx/eventinfo/572293153__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "573471818",
+      "title": "Philippine Army – ADT",
+      "url": "https://livetv.sx/enx/eventinfo/573471818__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "573825698",
+      "title": "Melbourne Victory – Persib Bandung",
+      "url": "https://livetv.sx/enx/eventinfo/573825698__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "628468492",
+      "title": "Yenisey – Nizhnyi Novgorod",
+      "url": "https://livetv.sx/enx/eventinfo/628468492_yenisey_nizhnyi_novgorod/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "630882548",
+      "title": "Yenisey – Nizhnyi Novgorod",
+      "url": "https://livetv.sx/enx/eventinfo/630882548__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359599",
+      "title": "Trostianets – Metalurh Zp",
+      "url": "https://livetv.sx/enx/eventinfo/607359599_trostianets_metalurh_zp/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "574034424",
+      "title": "Mendiola – Cebu",
+      "url": "https://livetv.sx/enx/eventinfo/574034424__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "574078020",
+      "title": "Seoul – The Cong-Viettel",
+      "url": "https://livetv.sx/enx/eventinfo/574078020__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359570",
+      "title": "Karpaty U19 – Lviv U19",
+      "url": "https://livetv.sx/enx/eventinfo/607359570_karpaty_u19_lviv_u19/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359571",
+      "title": "Livyi Bereg U19 – LNZ U19",
+      "url": "https://livetv.sx/enx/eventinfo/607359571_livyi_bereg_u19_lnz_u19/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "574279371",
+      "title": "Pohang Steelers – Gamba Osaka",
+      "url": "https://livetv.sx/enx/eventinfo/574279371__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359572",
+      "title": "Obolon U19 – Kharkiv U19",
+      "url": "https://livetv.sx/enx/eventinfo/607359572_obolon_u19_kharkiv_u19/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359573",
+      "title": "Oleksandria U19 – Polesia U19",
+      "url": "https://livetv.sx/enx/eventinfo/607359573_oleksandria_u19_polesia_u19/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359574",
+      "title": "Veres U19 – Kolos Kovalivka U-19",
+      "url": "https://livetv.sx/enx/eventinfo/607359574_veres_u19_kolos_kovalivka_u_19/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "628468596",
+      "title": "Leningradets – SKA-Khabarovsk",
+      "url": "https://livetv.sx/enx/eventinfo/628468596_leningradets_ska_khabarovsk/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "626827170",
+      "title": "Slovakia U18 – Hungary U18",
+      "url": "https://livetv.sx/enx/eventinfo/626827170_slovakia_u18_hungary_u18/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "630882549",
+      "title": "Leningradets – SKA-Khabarovsk",
+      "url": "https://livetv.sx/enx/eventinfo/630882549__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "628695569",
+      "title": "Porto U-19 – Napoli U-19",
+      "url": "https://livetv.sx/enx/eventinfo/628695569__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "574721298",
+      "title": "Buriram Utd – Kashima Antlers",
+      "url": "https://livetv.sx/enx/eventinfo/574721298__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "574567941",
+      "title": "Manila Digger – Tuloy",
+      "url": "https://livetv.sx/enx/eventinfo/574567941__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359610",
+      "title": "Dordoi – Asiagoal Bishkek",
+      "url": "https://livetv.sx/enx/eventinfo/607359610_dordoi_asiagoal_bishkek/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359611",
+      "title": "Ilbirs – Toktogul",
+      "url": "https://livetv.sx/enx/eventinfo/607359611_ilbirs_toktogul/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359612",
+      "title": "Bars – Muras United",
+      "url": "https://livetv.sx/enx/eventinfo/607359612_bars_muras_united/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "607359613",
+      "title": "Ozgon – Kyrgyzaltyn",
+      "url": "https://livetv.sx/enx/eventinfo/607359613_ozgon_kyrgyzaltyn/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "574820525",
+      "title": "Arkadag – Gol Gohar",
+      "url": "https://livetv.sx/enx/eventinfo/574820525__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "628607509",
+      "title": "Dortmund U-19 – Real Betis U-19",
+      "url": "https://livetv.sx/enx/eventinfo/628607509__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "630992668",
+      "title": "ZED – El Geish",
+      "url": "https://livetv.sx/enx/eventinfo/630992668__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "626798231",
+      "title": "Japan U17 (W) – North Korea U17 (W)",
+      "url": "https://livetv.sx/enx/eventinfo/626798231_japan_u17_w_north_korea_u17_w/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "580337421",
+      "title": "Rennes – Olympiacos",
+      "url": "https://livetv.sx/enx/eventinfo/580337421__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "575257544",
+      "title": "Al-Rayyan – Al-Nahda",
+      "url": "https://livetv.sx/enx/eventinfo/575257544__/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    },
+    {
+      "id": "575257545",
+      "title": "Al-Wahda – Al-Khaldiya",
+      "url": "https://livetv.sx/enx/eventinfo/575257545__/",
       "sport": "football",
       "provider": "LiveTV",
       "playable": false
@@ -124,10 +845,9 @@
     "livetv_errors": 0,
     "livetv_note": "LiveTV provides event links only, not verified playable streams",
     "errors": [
-      "uefa.europa.conf:OSError",
-      "uefa.champions:OSError",
-      "uefa.europa:OSError"
-    ],
-    "note": "Перша версія фіда: лише підтверджений матч; оновлення після запуску GitHub Actions"
+      "uefa.europa:HTTPError",
+      "uefa.champions:HTTPError",
+      "uefa.europa.conf:HTTPError"
+    ]
   }
 }
