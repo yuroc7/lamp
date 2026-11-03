@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "version": "1.0.0",
+  "updated_at": "2026-11-03T17:15:00Z",
+  "timezone": "Europe/Kyiv",
+  "fixtures": [
+    {
+      "id": "shakhtar_sporting_20261103",
+      "league": "ucl",
+      "competition": "Ліга чемпіонів",
+      "home": "Шахтар",
+      "away": "Спортінг",
+      "kickoff": "2026-11-03T17:45:00Z",
+      "status": "scheduled",
+      "important": true,
+      "broadcast": {
+        "name": "MEGOGO · Футбол Перший",
+        "cost": "paid",
+        "url": "https://megogo.net/ua/sport/28488016-shakhtar-sportinh.html",
+        "note": "В Україні лише з передплатою"
+      },
+      "livetv_url": "https://livetv.sx/eventinfo/399041287_shahter_sporting/",
+      "source": "Офіційна сторінка MEGOGO, 03.11.2026"
+    }
+  ],
+  "livetv": [
+    {
+      "id": "399041287",
+      "title": "Шахтер Донецк – Спортинг",
+      "url": "https://livetv.sx/eventinfo/399041287_shahter_sporting/",
+      "sport": "football",
+      "provider": "LiveTV",
+      "playable": false
+    }
+  ],
+  "services": [
+    {
+      "id": "suspilne",
+      "name": "Суспільне Спорт",
+      "category": "ua",
+      "cost": "free",
+      "url": "https://suspilne.media/sport/schedule/live/",
+      "note": "Безкоштовні українські ефіри; права на кожну подію різні."
+    },
+    {
+      "id": "fifaplus",
+      "name": "FIFA+",
+      "category": "football",
+      "cost": "free_limited",
+      "url": "https://www.plus.fifa.com/",
+      "note": "Окремі прямі матчі й архів; геодоступність залежить від турніру."
+    },
+    {
+      "id": "uefatv",
+      "name": "UEFA.tv",
+      "category": "football",
+      "cost": "free_limited",
+      "url": "https://www.uefa.tv/",
+      "note": "Футбол, молодіжні турніри та повтори; основна чоловіча ЛЧ наживо недоступна."
+    },
+    {
+      "id": "eurovisionsport",
+      "name": "Eurovision Sport",
+      "category": "multi",
+      "cost": "free_limited",
+      "url": "https://eurovisionsport.com/en",
+      "note": "Багато видів спорту, частина трансляцій геообмежена."
+    },
+    {
+      "id": "redbull",
+      "name": "Red Bull TV",
+      "category": "multi",
+      "cost": "free",
+      "url": "https://www.redbull.com/int-en/live-events/",
+      "note": "Автоспорт, екстрим і події наживо."
+    },
+    {
+      "id": "worldathletics",
+      "name": "World Athletics+",
+      "category": "athletics",
+      "cost": "free_limited",
+      "url": "https://worldathletics.org/watch/plus",
+      "note": "Легка атлетика, залежно від геоправ."
+    },
+    {
+      "id": "rugbypass",
+      "name": "RugbyPass TV",
+      "category": "rugby",
+      "cost": "free_limited",
+      "url": "https://rugbypass.tv/",
+      "note": "Регбі: окремі ефіри, архів; може знадобитися реєстрація."
+    },
+    {
+      "id": "suspilnetv",
+      "name": "Суспільне Спорт · телеканал наживо",
+      "category": "ua",
+      "cost": "free",
+      "url": "https://suspilne.media/sport/schedule/tv/",
+      "note": "Офіційна сторінка прямого ефіру та розкладу українського телеканалу."
+    },
+    {
+      "id": "allsportdb",
+      "name": "AllSportDB Live",
+      "category": "schedule",
+      "cost": "free",
+      "url": "https://live.allsportdb.com/",
+      "note": "Розклад спортивних ефірів і офіційні посилання; не власний відеоплеєр."
+    },
+    {
+      "id": "megogo",
+      "name": "MEGOGO Футбол",
+      "category": "football",
+      "cost": "paid",
+      "url": "https://megogo.net/ua/sport",
+      "note": "Офіційний мовник чоловічої Ліги чемпіонів в Україні за передплатою."
+    }
+  ],
+  "channels": [],
+  "health": {
+    "fixtures_ok": 0,
+    "fixtures_total": 3,
+    "fixtures_fallback": false,
+    "livetv_ok": true,
+    "livetv_errors": 0,
+    "livetv_note": "LiveTV provides event links only, not verified playable streams",
+    "errors": [
+      "uefa.europa.conf:OSError",
+      "uefa.champions:OSError",
+      "uefa.europa:OSError"
+    ],
+    "note": "Перша версія фіда: лише підтверджений матч; оновлення після запуску GitHub Actions"
+  }
+}
