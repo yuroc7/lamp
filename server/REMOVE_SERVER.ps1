@@ -1,5 +1,6 @@
 param([string]$InstallDir='C:\Y7SportBridge')
 $ErrorActionPreference='Stop'
+if(Test-Path -LiteralPath (Join-Path $InstallDir 'tailscale-sport.json')){throw 'Run DISCONNECT_TAILSCALE.cmd first to remove only the Sport HTTPS path, then retry REMOVE_SERVER.'}
 $task=Get-ScheduledTask -TaskName 'Y7 Sport Bridge' -ErrorAction SilentlyContinue
 if($task){
     $expected=Join-Path ([IO.Path]::GetFullPath($InstallDir)) 'y7_sport_bridge.py'

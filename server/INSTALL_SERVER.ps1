@@ -41,7 +41,7 @@ if(-not (Test-Path -LiteralPath $configPath)){
     [IO.File]::WriteAllText($configPath,($config | ConvertTo-Json)+[Environment]::NewLine,[Text.UTF8Encoding]::new($false))
 }
 $config=Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
-if($config.listen_host -ne $ServerIP -or $config.listen_port -ne 9122){throw 'Existing configuration has a different address/port; kept unchanged. Review manually.'}
+if($config.listen_host -notin @($ServerIP,'127.0.0.1') -or $config.listen_port -ne 9122){throw 'Existing configuration has a different address/port; kept unchanged. Review manually.'}
 # Protect both the live configuration and private backup from other local users.
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent().Name
 & icacls.exe $InstallDir /inheritance:r /grant:r ($identity+':(OI)(CI)F') '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
@@ -54,12 +54,13 @@ $settings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -R
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 $ruleName='Y7 Sport Bridge LAN 9122'
 if(Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue){Remove-NetFirewallRule -DisplayName $ruleName}
-New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalAddress $ServerIP -LocalPort 9122 -RemoteAddress $AllowedClients -Profile Private,Domain | Out-Null
+if($config.listen_host -eq $ServerIP){New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalAddress $ServerIP -LocalPort 9122 -RemoteAddress $AllowedClients -Profile Private,Domain | Out-Null}
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
-$health=Invoke-RestMethod -Uri ('http://'+$ServerIP+':9122/health') -TimeoutSec 8
+$health=Invoke-RestMethod -Uri ('http://'+$config.listen_host+':9122/health') -TimeoutSec 8
 if(-not $health.ok){throw 'Bridge did not start. Run CHECK_SERVER.ps1 for diagnostics.'}
-Write-Host ('Installed Y7 Sport Bridge '+$health.version+' at http://'+$ServerIP+':9122')
+Write-Host ('Installed Y7 Sport Bridge '+$health.version+'; local backend http://'+$config.listen_host+':9122')
+Write-Host 'For the remote LG TV, run CONNECT_TAILSCALE.cmd next and use its HTTPS URL.'
 Write-Host ('Private key: open '+$configPath+' on this server; copy access_key into Lampa. Key is not printed or uploaded.')
 Write-Host 'Auto-start is at this Windows account logon, not before logon. Install/run AceStream under the same account.'
 Write-Host ('Private backup retained: '+$backup)
