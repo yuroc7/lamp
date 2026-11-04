@@ -41,13 +41,35 @@ function Wait-Stopped(){
     }
     throw 'Sport Bridge task did not stop. No unrelated process was killed.'
 }
+function Assert-FunnelPathSupport([string]$Executable){
+    # Native CLIs may print valid help on stderr and return a non-zero help
+    # exit code. Read both streams without PowerShell 5.1 NativeCommandError
+    # conversion; actual configuration commands still require exit code zero.
+    $start=[Diagnostics.ProcessStartInfo]::new()
+    $start.FileName=$Executable
+    $start.Arguments='funnel --help'
+    $start.UseShellExecute=$false
+    $start.CreateNoWindow=$true
+    $start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
+    $start.RedirectStandardOutput=$true
+    $start.RedirectStandardError=$true
+    $process=[Diagnostics.Process]::new()
+    $process.StartInfo=$start
+    try{
+        if(-not $process.Start()){throw 'Could not start Tailscale help probe.'}
+        $stdout=$process.StandardOutput.ReadToEndAsync()
+        $stderr=$process.StandardError.ReadToEndAsync()
+        if(-not $process.WaitForExit(10000)){$process.Kill();throw 'Tailscale help probe timed out.'}
+        $helpText=$stdout.GetAwaiter().GetResult()+"`n"+$stderr.GetAwaiter().GetResult()
+        if($helpText -notmatch '(?m)^\s*--set-path(?:\s|=|,|$)'){throw 'Tailscale help did not advertise --set-path. No network settings changed.'}
+    }finally{$process.Dispose()}
+}
 $backup=Join-Path $InstallDir ('backups\tailscale-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 $before=Join-Path $backup 'serve-before.json'
 Read-Serve $before
 $topology=Check-Topology $before
-$help=& $tailscale funnel --help
-if($LASTEXITCODE -ne 0 -or ($help -join "`n") -notmatch '--set-path'){throw 'Installed Tailscale does not expose the required Funnel path flag.'}
+Assert-FunnelPathSupport $tailscale
 Copy-Item -LiteralPath $configPath -Destination (Join-Path $backup 'bridge-config.before.json')
 $base='http://'+$config.listen_host+':9122'
 $health=Invoke-RestMethod -Uri ($base+'/health') -TimeoutSec 5
